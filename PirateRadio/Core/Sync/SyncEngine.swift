@@ -69,7 +69,7 @@ actor SyncEngine {
     // MARK: - Lifecycle
 
     func start(sessionID: SessionID, token: String) async throws {
-        guard clock.isSynced else {
+        if !clock.isSynced {
             await clock.resync()
         }
 
