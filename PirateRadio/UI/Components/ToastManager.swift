@@ -79,55 +79,63 @@ final class ToastManager {
     }
 }
 
-/// Overlay that displays toast notifications sliding in from the top.
+/// Compact toast ticker pinned to the bottom safe area.
+/// Lives in its own dedicated strip so it never covers other UI.
 struct ToastOverlay: View {
     @Environment(ToastManager.self) private var toastManager
 
     var body: some View {
-        VStack(spacing: 8) {
-            ForEach(toastManager.toasts) { toast in
-                toastView(toast)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .gesture(
-                        DragGesture(minimumDistance: 20)
-                            .onEnded { value in
-                                if value.translation.height < -10 {
-                                    toastManager.dismiss(toast)
-                                }
-                            }
-                    )
-            }
+        VStack {
             Spacer()
+
+            VStack(spacing: 4) {
+                ForEach(toastManager.toasts) { toast in
+                    toastView(toast)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .gesture(
+                            DragGesture(minimumDistance: 20)
+                                .onEnded { value in
+                                    if value.translation.height > 10 {
+                                        toastManager.dismiss(toast)
+                                    }
+                                }
+                        )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
         }
-        .padding(.top, 8)
-        .padding(.horizontal, 16)
-        .allowsHitTesting(true)
+        .allowsHitTesting(!toastManager.toasts.isEmpty)
     }
 
     private func toastView(_ toast: ToastManager.Toast) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Image(systemName: toast.icon)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(toast.color)
 
             Text(toast.message)
-                .font(PirateTheme.body(13))
-                .foregroundStyle(.white)
-                .lineLimit(2)
+                .font(PirateTheme.body(11))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
 
             Spacer()
+
+            // Colored pip as dismiss hint
+            Circle()
+                .fill(toast.color.opacity(0.4))
+                .frame(width: 5, height: 5)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(PirateTheme.void.opacity(0.95))
+            Capsule()
+                .fill(PirateTheme.void.opacity(0.9))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(toast.color.opacity(0.4), lineWidth: 1)
+                    Capsule()
+                        .strokeBorder(toast.color.opacity(0.25), lineWidth: 0.5)
                 )
         )
-        .shadow(color: toast.color.opacity(0.2), radius: 8)
         .sensoryFeedback(.impact(weight: .light), trigger: toast.id)
     }
 }

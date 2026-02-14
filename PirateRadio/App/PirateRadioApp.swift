@@ -27,7 +27,10 @@ struct PirateRadioApp: App {
         WindowGroup {
             RootView()
                 .preferredColorScheme(.dark)
-                .overlay { ToastOverlay() }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    ToastOverlay()
+                        .animation(.spring(duration: 0.3), value: toastManager.toasts.map(\.id))
+                }
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     guard !Self.demoMode else { return }
                     if isAuth {
