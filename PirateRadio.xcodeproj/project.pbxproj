@@ -53,6 +53,7 @@
 		D9D3BEEFD1D1D6D0004CCFB1 /* HotSeatBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2198441C050E13DC4038C08 /* HotSeatBanner.swift */; };
 		DD43C9013B4D08E85474446D /* SessionLobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8CBC3E502740119B63125A /* SessionLobbyView.swift */; };
 		DFD8A3E9EE29DE39455C7F87 /* CRTStaticOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */; };
+		E72BB7E77D74ED6E34344EFE /* BeatPulseBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3391FC863811594B8B3B3A /* BeatPulseBackground.swift */; };
 		EBDEB57FD74A698E940ECD1E /* PirateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286E17C8D1EE92CA55C94361 /* PirateTheme.swift */; };
 		FB2F94D4CA85F21F198002E1 /* SessionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E74DECE41C50E3D1473600E /* SessionSettingsView.swift */; };
 		FB5940930C687FC0BDAC32C9 /* SessionRecapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695D4EC6D5CCEFEC511B2BB2 /* SessionRecapView.swift */; };
@@ -116,6 +117,7 @@
 		D7602EDD6BC60A82E0754A3B /* ToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManager.swift; sourceTree = "<group>"; };
 		D87415D7E21E29074C898BD5 /* PirateRadioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioApp.swift; sourceTree = "<group>"; };
 		DD902CFB43ED0E40F25AF39C /* VinylArtView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VinylArtView.swift; sourceTree = "<group>"; };
+		EB3391FC863811594B8B3B3A /* BeatPulseBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeatPulseBackground.swift; sourceTree = "<group>"; };
 		F15BEE3A88814DC1FBECEA3A /* SpotifyAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuth.swift; sourceTree = "<group>"; };
 		F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRTStaticOverlay.swift; sourceTree = "<group>"; };
 		F98ECD25694E483F36914616 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -278,6 +280,7 @@
 		905BE6B9FF952FF3EC82AE7C /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				EB3391FC863811594B8B3B3A /* BeatPulseBackground.swift */,
 				38EF73C4983CA0C2182E6FD2 /* BPMGauge.swift */,
 				50858029E4349C69A37E144C /* ConnectionStatusBadge.swift */,
 				F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */,
@@ -494,6 +497,7 @@
 			files = (
 				2F58E8039C295B038D93EE6F /* AppDelegate.swift in Sources */,
 				BE90BCF37CFDF98AF581D1D0 /* BPMGauge.swift in Sources */,
+				E72BB7E77D74ED6E34344EFE /* BeatPulseBackground.swift in Sources */,
 				DFD8A3E9EE29DE39455C7F87 /* CRTStaticOverlay.swift in Sources */,
 				D9A3C6C56ACDAFB1BAD995C5 /* ChairliftModeView.swift in Sources */,
 				6AF281A182256CE06A16853B /* ClockProvider.swift in Sources */,

@@ -29,6 +29,9 @@ struct NowPlayingView: View {
         ZStack {
             PirateTheme.void.ignoresSafeArea()
 
+            // Pulsing beat background — behind all UI
+            BeatPulseBackground(isPlaying: sessionStore.session?.isPlaying ?? false)
+
             if chairliftMode {
                 ChairliftModeView()
             } else {
