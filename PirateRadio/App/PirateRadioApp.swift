@@ -44,8 +44,12 @@ struct SessionRootView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if sessionStore.session != nil {
-                    CreateSessionView()
+                if let session = sessionStore.session {
+                    if session.currentTrack != nil {
+                        NowPlayingView()
+                    } else {
+                        CreateSessionView()
+                    }
                 } else {
                     SessionLobbyView()
                 }

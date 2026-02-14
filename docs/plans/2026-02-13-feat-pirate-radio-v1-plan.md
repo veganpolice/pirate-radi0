@@ -389,26 +389,26 @@ The original plan had 25+ source files. Reduced to ~15 for MVP:
 
 **Goal:** Solo DJ mode works, app looks and feels like Pirate Radio, ready for TestFlight.
 
-- [ ] **Solo DJ mode:** DJ has playback control (play, pause, skip, queue tracks). Listeners see what's playing, can request songs via queue. — `DJControlsView.swift`, `ListenerView.swift`, `QueueView.swift`
+- [x] **Solo DJ mode:** DJ has playback control (play, pause, skip, queue tracks). Listeners see what's playing, can request songs via queue. — `NowPlayingView.swift`, `QueueView.swift`
   - Backend-authoritative queue: clients send mutation requests, server broadcasts canonical state
   - Queue add operations use nonces for idempotent retransmission
   - Handle DJ disconnect: auto-promote next member
-- [ ] **Design system** — `PirateTheme.swift`
+- [x] **Design system** — `PirateTheme.swift`
   - Semantic color palette: `signal` (cyan #00FFE0), `broadcast` (magenta #FF00FF), `flare` (amber #FFB800), `void` (#0D0D0D)
   - Cyan = primary/active/connected, Magenta = DJ/authority, Amber = alerts/warmth
   - Never two neon colors at equal weight in same view
   - Bundle custom fonts: Share Tech Mono (numbers/body), Dela Gothic One (display/headers)
-- [ ] **Neon glow modifier** — `NeonGlow.swift`
+- [x] **Neon glow modifier** — `NeonGlow.swift`
   - Triple-layered shadows: tight core (radius 2, 0.9 opacity) + medium (radius 8, 0.4) + wide ambient (radius 20, 0.15)
   - Optional subtle flicker (random ±5% opacity every 2-5s for 100ms)
-- [ ] **Glove-friendly buttons** — `GloveButton.swift`
+- [x] **Glove-friendly buttons** — `GloveButton.swift`
   - 60pt+ touch targets, neon border style, press-to-fill animation
   - `.sensoryFeedback(.impact(.medium), trigger:)` on all taps
-- [ ] **Frequency dial** — `FrequencyDial.swift` (volume control, hero component)
+- [x] **Frequency dial** — `FrequencyDial.swift` (volume control, hero component)
   - DragGesture → angle calculation, tick marks, neon indicator line
   - Haptic detents at 0/25/50/75/100%
   - Physical inertia on release (deceleration animation)
-- [ ] **Now Playing screen** — `NowPlayingView.swift`
+- [x] **Now Playing screen** — `NowPlayingView.swift`
   - Asymmetric layout: album art upper-left at 60% width, track title overlapping in neon
   - Crew list as horizontal strip with role-colored avatar rings (cyan = listener, magenta = DJ)
   - Staggered entrance animation: art → title → controls → crew
@@ -417,10 +417,10 @@ The original plan had 25+ source files. Reduced to ~15 for MVP:
   - CRT static overlay fades as user dials toward session frequency
   - Snap haptic on lock, static dissolves, album art blooms through
   - Session code maps to displayed frequency (e.g., code 1073 = "107.3 FM")
-- [ ] Lock screen / Dynamic Island via `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter`
-- [ ] Haptic feedback on all controls
+- [x] Lock screen / Dynamic Island via `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter`
+- [x] Haptic feedback on all controls
 - [ ] Onboarding: first-launch flow explaining Spotify Premium requirement
-- [ ] Session idle timeout: 30 minutes of no playback
+- [x] Session idle timeout: 30 minutes of no playback
 - [ ] Battery: reduce drift checks to 60s when backgrounded, clock sync to 5min
 - [ ] TestFlight build, test on actual ski mountain with 3+ devices
 
