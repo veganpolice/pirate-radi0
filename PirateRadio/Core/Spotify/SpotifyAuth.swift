@@ -9,7 +9,7 @@ final class SpotifyAuthManager {
     // MARK: - Configuration
 
     /// Set these in your Spotify Developer Dashboard
-    static let clientID = "YOUR_SPOTIFY_CLIENT_ID" // TODO: Replace with actual client ID
+    static let clientID = "441011e5cfc04417a7c9bc73fc295939"
     static let redirectURI = "pirate-radio://auth/callback" // TODO: Switch to Universal Link
     static let scopes = [
         "user-read-playback-state",
