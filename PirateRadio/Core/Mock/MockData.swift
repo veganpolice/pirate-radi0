@@ -183,13 +183,16 @@ enum MockData {
 
     // MARK: - Demo Session Factory
 
+    /// Members who aren't in the initial session — they join over time.
+    static let lateJoiners: [Session.Member] = Array(members.dropFirst(2))
+
     static func demoSession(djMode: DJMode = .solo) -> Session {
         Session(
             id: UUID().uuidString,
             joinCode: "7734",
             creatorID: "demo-user-1",
             djUserID: "demo-user-1",
-            members: Array(members.prefix(5)),
+            members: Array(members.prefix(2)),
             queue: demoQueue,
             currentTrack: tracks[0],
             isPlaying: true,

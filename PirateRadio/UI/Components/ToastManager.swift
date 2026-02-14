@@ -79,23 +79,21 @@ final class ToastManager {
     }
 }
 
-/// Compact toast ticker pinned to the bottom safe area.
+/// Compact toast ticker pinned to the top safe area.
 /// Lives in its own dedicated strip so it never covers other UI.
 struct ToastOverlay: View {
     @Environment(ToastManager.self) private var toastManager
 
     var body: some View {
         VStack {
-            Spacer()
-
             VStack(spacing: 4) {
                 ForEach(toastManager.toasts) { toast in
                     toastView(toast)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.move(edge: .top).combined(with: .opacity))
                         .gesture(
                             DragGesture(minimumDistance: 20)
                                 .onEnded { value in
-                                    if value.translation.height > 10 {
+                                    if value.translation.height < -10 {
                                         toastManager.dismiss(toast)
                                     }
                                 }
@@ -103,7 +101,9 @@ struct ToastOverlay: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 4)
+            .padding(.top, 4)
+
+            Spacer()
         }
         .allowsHitTesting(!toastManager.toasts.isEmpty)
     }

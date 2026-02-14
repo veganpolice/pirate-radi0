@@ -5,11 +5,28 @@ import SwiftUI
 /// subtle ring expansions and a CRT scan line.
 struct BeatPulseBackground: View {
     var isPlaying: Bool
+    var members: [Session.Member] = []
+    var djUserID: UserID = ""
 
     @State private var bpm: Double = 128
     @State private var breathePhase: Bool = false
-    @State private var ringTrigger: Int = 0
-    @State private var ringOriginX: CGFloat = -0.05
+    @State private var sceneStart: Date = .now
+    @State private var spawnedRings: [SpawnedRing] = []
+
+    /// Deterministic speed matching NeonPirateScene's stableSpeed.
+    private func stableSpeed(for id: String) -> Double {
+        let hash = id.utf8.reduce(0) { ($0 &+ UInt64($1)) &* 37 }
+        return 14.0 + Double(hash % 800) / 100.0
+    }
+
+    /// Compute the DJ ship's X from elapsed time (DJ uses offset 0).
+    private func djShipX() -> CGFloat {
+        guard !djUserID.isEmpty else { return 0.5 }
+        let speed = stableSpeed(for: djUserID)
+        let elapsed = Date.now.timeIntervalSince(sceneStart)
+        let fraction = (elapsed.truncatingRemainder(dividingBy: speed)) / speed
+        return -0.05 + fraction * 1.1
+    }
 
     private var beatInterval: Double { 60.0 / bpm }
 
@@ -27,9 +44,6 @@ struct BeatPulseBackground: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Ring origin tracks the pirate ship's position
-            let ringCenter = CGPoint(x: ringOriginX * geo.size.width, y: geo.size.height * 0.65)
-
             ZStack {
                 // Layer 1: Large warped blobs that fill the screen
                 WarpBlob(
@@ -62,15 +76,9 @@ struct BeatPulseBackground: View {
                     index: 2
                 )
 
-                // Layer 2: Slow expanding rings from ship position
-                ForEach(0..<3, id: \.self) { i in
-                    SlowPulseRing(
-                        center: ringCenter,
-                        color: i.isMultiple(of: 2) ? zoneColor : secondaryColor,
-                        delay: Double(i) * 2.0,
-                        isPlaying: isPlaying,
-                        trigger: ringTrigger
-                    )
+                // Layer 2: Spawned rings — each keeps its birth position
+                ForEach(spawnedRings) { ring in
+                    SpawnedRingView(ring: ring)
                 }
 
                 // Layer 3: Scan line
@@ -93,24 +101,31 @@ struct BeatPulseBackground: View {
         }
         .task(id: isPlaying) {
             guard isPlaying else { return }
-            // Slow breathe cycle: 6-10 seconds per phase
+            // Slow breathe cycle + spawn rings at a random ship's position
             while !Task.isCancelled {
                 withAnimation(.easeInOut(duration: Double.random(in: 6...10))) {
                     breathePhase.toggle()
                 }
-                // Trigger ring every few breaths
-                ringTrigger += 1
-                try? await Task.sleep(for: .seconds(Double.random(in: 6...10)))
-            }
-        }
-        .task {
-            // Mirror the pirate ship's 18-second sail across
-            while !Task.isCancelled {
-                ringOriginX = -0.05
-                withAnimation(.linear(duration: 18)) {
-                    ringOriginX = 1.05
+                // Spawn a ring from the DJ's flagship
+                if !djUserID.isEmpty {
+                    let screenW = UIScreen.main.bounds.width
+                    let screenH = UIScreen.main.bounds.height
+                    let x = djShipX()
+                    let spawnPoint = CGPoint(x: x * screenW, y: screenH * 0.52)
+                    let djColor = members.first(where: { $0.id == djUserID })?.avatarColor.color ?? PirateTheme.signal
+                    let ring = SpawnedRing(
+                        birthPosition: spawnPoint,
+                        color: djColor.opacity(0.6),
+                        rotation: Double.random(in: 0...360)
+                    )
+                    withAnimation(.spring(duration: 0.3)) {
+                        spawnedRings.append(ring)
+                    }
+                    if spawnedRings.count > 10 {
+                        spawnedRings.removeFirst(spawnedRings.count - 10)
+                    }
                 }
-                try? await Task.sleep(for: .seconds(18))
+                try? await Task.sleep(for: .seconds(Double.random(in: 4...7)))
             }
         }
     }
@@ -207,39 +222,37 @@ private struct WarpBlob: View {
     }
 }
 
-// MARK: - Slow Pulse Ring
+// MARK: - Spawned Ring
 
-/// Rings that expand very slowly across the full screen and fade.
-private struct SlowPulseRing: View {
-    let center: CGPoint
+/// Data for a ring spawned at a fixed position.
+struct SpawnedRing: Identifiable {
+    let id = UUID()
+    let birthPosition: CGPoint
     let color: Color
-    let delay: Double
-    let isPlaying: Bool
-    let trigger: Int
+    let rotation: Double
+}
+
+/// A ring that expands from its fixed birth position and fades out.
+private struct SpawnedRingView: View {
+    let ring: SpawnedRing
 
     @State private var scale: CGFloat = 0.2
     @State private var opacity: Double = 0
 
     var body: some View {
         Ellipse()
-            .strokeBorder(color, lineWidth: 1)
-            // Slight warp — not a perfect circle
+            .strokeBorder(ring.color, lineWidth: 1)
             .frame(width: 250, height: 220)
             .scaleEffect(scale)
-            .rotationEffect(.degrees(Double(trigger) * 15))
+            .rotationEffect(.degrees(ring.rotation))
             .opacity(opacity)
-            .position(center)
-            .onChange(of: trigger) { _, _ in
-                guard isPlaying else { return }
-                Task {
-                    try? await Task.sleep(for: .seconds(delay))
-                    scale = 0.2
-                    opacity = 0.3
-                    // Very slow expansion across full screen
-                    withAnimation(.easeOut(duration: 8)) {
-                        scale = 6.0
-                        opacity = 0
-                    }
+            .position(ring.birthPosition)
+            .onAppear {
+                scale = 0.2
+                opacity = 0.35
+                withAnimation(.easeOut(duration: 10)) {
+                    scale = 7.0
+                    opacity = 0
                 }
             }
     }

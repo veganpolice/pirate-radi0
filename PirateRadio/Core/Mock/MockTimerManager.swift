@@ -26,6 +26,7 @@ final class MockTimerManager {
     func start() {
         guard !isRunning else { return }
         isRunning = true
+        startCrewDrip()
         startMemberEvents()
         startVoteEvents()
         startRequestEvents()
@@ -56,6 +57,19 @@ final class MockTimerManager {
     }
 
     // MARK: - Private Timers
+
+    /// Slowly add late-joining members one at a time.
+    private func startCrewDrip() {
+        let task = Task {
+            for member in MockData.lateJoiners {
+                let delay = Double.random(in: 8...18)
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled && isRunning else { break }
+                lastEvent = .memberJoined(member.displayName)
+            }
+        }
+        tasks.append(task)
+    }
 
     private func startMemberEvents() {
         let task = Task {

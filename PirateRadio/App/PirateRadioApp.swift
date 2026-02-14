@@ -27,7 +27,7 @@ struct PirateRadioApp: App {
         WindowGroup {
             RootView()
                 .preferredColorScheme(.dark)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
+                .safeAreaInset(edge: .top, spacing: 0) {
                     ToastOverlay()
                         .animation(.spring(duration: 0.3), value: toastManager.toasts.map(\.id))
                 }
@@ -59,6 +59,9 @@ struct PirateRadioApp: App {
         switch event {
         case .memberJoined(let name):
             toastManager.show(.memberJoined, message: "\(name) joined the session")
+            if let member = MockData.members.first(where: { $0.displayName == name }) {
+                sessionStore?.addMember(member)
+            }
         case .memberLeft(let name):
             toastManager.show(.memberLeft, message: "\(name) left the session")
         case .songRequested(let track, let by):
