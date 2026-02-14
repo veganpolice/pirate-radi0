@@ -2,6 +2,7 @@ import Foundation
 
 enum PirateRadioError: LocalizedError {
     // Auth
+    case notAuthenticated
     case spotifyNotInstalled
     case spotifyNotLoggedIn
     case spotifyNotPremium
@@ -13,8 +14,10 @@ enum PirateRadioError: LocalizedError {
     case sessionFull
     case invalidJoinCode
     case notAuthorized(action: String)
+    case sessionCreationFailed(underlying: Error)
 
     // Sync
+    case notConnected
     case clockSyncFailed
     case driftUnrecoverable(offsetMs: Int)
     case transportDisconnected
@@ -26,6 +29,8 @@ enum PirateRadioError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .notAuthenticated:
+            return "Please sign in to continue."
         case .spotifyNotInstalled:
             return "Spotify is not installed. Please install Spotify to use Pirate Radio."
         case .spotifyNotLoggedIn:
@@ -44,6 +49,10 @@ enum PirateRadioError: LocalizedError {
             return "Invalid session code."
         case .notAuthorized(let action):
             return "You're not authorized to \(action)."
+        case .sessionCreationFailed:
+            return "Failed to create session. Please try again."
+        case .notConnected:
+            return "Not connected to session."
         case .clockSyncFailed:
             return "Unable to sync clocks. Check your connection."
         case .driftUnrecoverable:

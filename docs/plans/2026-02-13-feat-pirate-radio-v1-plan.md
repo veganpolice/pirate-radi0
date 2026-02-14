@@ -356,31 +356,31 @@ The original plan had 25+ source files. Reduced to ~15 for MVP:
 
 **Goal:** Two devices play the same track at approximately the same time.
 
-- [ ] Set up Node.js backend (`index.js`): express + ws + in-memory session state
-- [ ] Implement JWT authentication: client proves Spotify identity → backend issues short-lived JWT → JWT required for WebSocket upgrade
-- [ ] Session CRUD: create (returns 4-digit code), join (validate code + JWT), leave
+- [x] Set up Node.js backend (`index.js`): express + ws + in-memory session state
+- [x] Implement JWT authentication: client proves Spotify identity → backend issues short-lived JWT → JWT required for WebSocket upgrade
+- [x] Session CRUD: create (returns 4-digit code), join (validate code + JWT), leave
   - Session IDs: UUID v4 (unguessable)
   - Join codes: 4-digit numeric, rotatable, expire after 1 hour
   - Max 10 members per session
-- [ ] WebSocket connection management: authenticated upgrade, 15-20s ping interval, 5s timeout for disconnect detection
-- [ ] Implement Kronos clock sync on device — `SyncEngine.swift`
-- [ ] Implement two-phase coordinated play (prepare/commit with 1500ms lead time)
-- [ ] Implement NTP-anchored position model for all sync messages
-- [ ] Implement message ordering: monotonic sequence numbers, epoch validation
-- [ ] Implement per-device Spotify latency calibration (measure first 3 play commands)
-- [ ] Implement three-tier drift correction (ignore / rate adjust / hard seek)
+- [x] WebSocket connection management: authenticated upgrade, 15-20s ping interval, 5s timeout for disconnect detection
+- [x] Implement Kronos clock sync on device — `SyncEngine.swift`
+- [x] Implement two-phase coordinated play (prepare/commit with 1500ms lead time)
+- [x] Implement NTP-anchored position model for all sync messages
+- [x] Implement message ordering: monotonic sequence numbers, epoch validation
+- [x] Implement per-device Spotify latency calibration (measure first 3 play commands)
+- [x] Implement three-tier drift correction (ignore / rate adjust / hard seek)
   - Adaptive frequency: 5s for first minute, 15s once stable
   - 500ms cooldown after any correction
-- [ ] Implement coordinated pause/resume/skip with timestamped commands
-- [ ] Handle join-mid-song: backend sends NTP-anchored current position, device computes and seeks
-- [ ] Implement reconnection state machine: CONNECTED → RECONNECTING → DISCONNECTED → RESYNCING
+- [x] Implement coordinated pause/resume/skip with timestamped commands
+- [x] Handle join-mid-song: backend sends NTP-anchored current position, device computes and seeks
+- [x] Implement reconnection state machine: CONNECTED → RECONNECTING → DISCONNECTED → RESYNCING
   - Exponential backoff: 0.5s, 1s, 2s, 4s, 8s, cap 15s
   - On reconnect: send `{lastSeenSeq, lastSeenEpoch}`, server replies with delta or full sync
   - During disconnect: continue playing current track without sync (graceful degradation)
-- [ ] Build session create UI (displays 4-digit code) — `CreateSessionView.swift`
-- [ ] Build session join UI (enter code) — `JoinSessionView.swift`
+- [x] Build session create UI (displays 4-digit code) — `CreateSessionView.swift`
+- [x] Build session join UI (enter code) — `JoinSessionView.swift`
 - [ ] Deploy backend to Fly.io
-- [ ] Rate limit: 5 sessions/user/hour, 10 join attempts/IP/min
+- [x] Rate limit: 5 sessions/user/hour, 10 join attempts/IP/min
 - [ ] Verify: two devices play same track within ~300ms over cellular
 
 **Success criteria:** Multi-device sync works. Reconnection recovers gracefully. This validates the entire product hypothesis.

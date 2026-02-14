@@ -13,8 +13,7 @@ struct Session: Codable, Sendable, Identifiable, Equatable {
 
     struct Member: Codable, Sendable, Identifiable, Equatable {
         let id: UserID
-        let displayName: String
-        let isDJ: Bool
-        let joinedAt: Date
+        var displayName: String
+        var isConnected: Bool
     }
 }
