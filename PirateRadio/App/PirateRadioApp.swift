@@ -23,39 +23,31 @@ struct PirateRadioApp: App {
         }
     }
 
-    private var isTesting: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-    }
-
     var body: some Scene {
         WindowGroup {
-            if isTesting {
-                Color.clear
-            } else {
-                RootView()
-                    .environment(authManager)
-                    .environment(toastManager)
-                    .environment(mockTimerManager)
-                    .preferredColorScheme(.dark)
-                    .overlay { ToastOverlay() }
-                    .onChange(of: authManager.isAuthenticated) { _, isAuth in
-                        guard !Self.demoMode else { return }
-                        if isAuth {
-                            sessionStore = SessionStore(authManager: authManager)
-                        } else {
-                            sessionStore = nil
-                        }
+            RootView()
+                .preferredColorScheme(.dark)
+                .overlay { ToastOverlay() }
+                .onChange(of: authManager.isAuthenticated) { _, isAuth in
+                    guard !Self.demoMode else { return }
+                    if isAuth {
+                        sessionStore = SessionStore(authManager: authManager)
+                    } else {
+                        sessionStore = nil
                     }
-                    .optionalEnvironment(sessionStore)
-                    .onAppear {
-                        if Self.demoMode {
-                            mockTimerManager.start()
-                        }
+                }
+                .optionalEnvironment(sessionStore)
+                .onAppear {
+                    if Self.demoMode {
+                        mockTimerManager.start()
                     }
-                    .onChange(of: mockTimerManager.lastEvent) { _, event in
-                        handleMockEvent(event)
-                    }
-            }
+                }
+                .onChange(of: mockTimerManager.lastEvent) { _, event in
+                    handleMockEvent(event)
+                }
+                .environment(authManager)
+                .environment(toastManager)
+                .environment(mockTimerManager)
         }
     }
 
