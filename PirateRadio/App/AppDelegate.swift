@@ -23,14 +23,4 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    // MARK: - Spotify OAuth Redirect Handling
-
-    func application(
-        _ app: UIApplication,
-        open url: URL,
-        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
-    ) -> Bool {
-        SpotifyAuthManager.handleRedirectURL(url)
-        return true
-    }
 }

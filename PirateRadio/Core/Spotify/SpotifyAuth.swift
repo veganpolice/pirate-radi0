@@ -1,7 +1,10 @@
 import Foundation
-import UIKit
+import AuthenticationServices
 import Security
 import CryptoKit
+import os
+
+private let logger = Logger(subsystem: "com.pirateradio", category: "SpotifyAuth")
 
 /// Manages Spotify OAuth/PKCE authentication with secure Keychain token storage.
 @Observable
@@ -33,8 +36,8 @@ final class SpotifyAuthManager {
     private var tokenExpiry: Date?
     private var codeVerifier: String?
 
-    // Continuation for the OAuth redirect callback
-    private static var authContinuation: CheckedContinuation<URL, Error>?
+    // ASWebAuthenticationSession context provider
+    private let webAuthContextProvider = WebAuthContextProvider()
 
     // MARK: - Init
 
@@ -48,7 +51,7 @@ final class SpotifyAuthManager {
 
     // MARK: - Public API
 
-    /// Start the Spotify OAuth/PKCE login flow.
+    /// Start the Spotify OAuth/PKCE login flow using ASWebAuthenticationSession.
     func signIn() async {
         error = nil
         let verifier = generateCodeVerifier()
@@ -66,25 +69,34 @@ final class SpotifyAuthManager {
         ]
 
         guard let url = components.url else { return }
+        logger.notice("Authorization URL: \(url.absoluteString)")
+        logger.notice("Client ID: \(Self.clientID)")
+        logger.notice("Redirect URI: \(Self.redirectURI)")
 
-        // Open Spotify auth in browser
-        await UIApplication.shared.open(url)
-
-        // Wait for the redirect callback
         do {
-            let callbackURL = try await withCheckedThrowingContinuation { continuation in
-                Self.authContinuation = continuation
+            let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+                let session = ASWebAuthenticationSession(
+                    url: url,
+                    callbackURLScheme: "pirate-radio"
+                ) { callbackURL, error in
+                    if let callbackURL {
+                        continuation.resume(returning: callbackURL)
+                    } else if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(throwing: PirateRadioError.notAuthenticated)
+                    }
+                }
+                session.presentationContextProvider = webAuthContextProvider
+                session.prefersEphemeralWebBrowserSession = false
+                session.start()
             }
             try await handleAuthCallback(callbackURL)
+        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+            // User cancelled — not an error
         } catch {
             self.error = .tokenRefreshFailed(underlying: error)
         }
-    }
-
-    /// Handle the OAuth redirect URL. Called from AppDelegate.
-    static func handleRedirectURL(_ url: URL) {
-        authContinuation?.resume(returning: url)
-        authContinuation = nil
     }
 
     /// Sign out and clear all tokens.
@@ -204,6 +216,15 @@ final class SpotifyAuthManager {
         }
     }
 
+    // MARK: - Demo Mode
+
+    func enableDemoMode() {
+        isAuthenticated = true
+        isPremium = true
+        displayName = "DJ Powder"
+        userID = "demo-user-1"
+    }
+
     // MARK: - PKCE
 
     /// Generate a cryptographically random code verifier (43-128 chars).
@@ -319,6 +340,14 @@ private struct SpotifyProfile: Codable {
         case id
         case displayName = "display_name"
         case product
+    }
+}
+
+// MARK: - ASWebAuthenticationSession Context
+
+private final class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        ASPresentationAnchor()
     }
 }
 

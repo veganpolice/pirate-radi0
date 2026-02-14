@@ -62,7 +62,8 @@ final class SessionStore {
                 queue: [],
                 currentTrack: nil,
                 isPlaying: false,
-                epoch: 0
+                epoch: 0,
+                djMode: .solo
             )
 
             try await connectToSession(sessionID: sessionInfo.id, token: backendToken)
@@ -140,7 +141,7 @@ final class SessionStore {
         case .playbackStateChanged(let isPlaying, _):
             session?.isPlaying = isPlaying
         case .memberJoined(let userID, let name):
-            session?.members.append(Session.Member(id: userID, displayName: name, isConnected: true))
+            session?.members.append(Session.Member(id: userID, displayName: name, isConnected: true, avatarColor: AvatarColor.allCases.randomElement()!))
         case .memberLeft(let userID):
             session?.members.removeAll { $0.id == userID }
         case .queueUpdated:
@@ -185,7 +186,8 @@ final class SessionStore {
             queue: [],
             currentTrack: nil,
             isPlaying: false,
-            epoch: 0
+            epoch: 0,
+            djMode: .solo
         )
     }
 
@@ -204,6 +206,92 @@ final class SessionStore {
         }
 
         return try JSONDecoder().decode(JoinSessionResponse.self, from: data)
+    }
+}
+
+// MARK: - Demo Mode
+
+extension SessionStore {
+    static func demo(djMode: DJMode = .solo) -> SessionStore {
+        let auth = SpotifyAuthManager()
+        auth.enableDemoMode()
+        let store = SessionStore(authManager: auth)
+        store.session = MockData.demoSession(djMode: djMode)
+        store.connectionState = .connected
+        return store
+    }
+
+    // MARK: - Demo Actions
+
+    func toggleVote(trackID: String, isUpvote: Bool) {
+        guard var queue = session?.queue,
+              let idx = queue.firstIndex(where: { $0.id == trackID }) else { return }
+
+        if isUpvote {
+            if queue[idx].isUpvotedByMe {
+                queue[idx].votes -= 1
+                queue[idx].isUpvotedByMe = false
+            } else {
+                queue[idx].votes += 1
+                queue[idx].isUpvotedByMe = true
+                if queue[idx].isDownvotedByMe {
+                    queue[idx].votes += 1
+                    queue[idx].isDownvotedByMe = false
+                }
+            }
+        } else {
+            if queue[idx].isDownvotedByMe {
+                queue[idx].votes += 1
+                queue[idx].isDownvotedByMe = false
+            } else {
+                queue[idx].votes -= 1
+                queue[idx].isDownvotedByMe = true
+                if queue[idx].isUpvotedByMe {
+                    queue[idx].votes -= 1
+                    queue[idx].isUpvotedByMe = false
+                }
+            }
+        }
+        session?.queue = queue
+    }
+
+    func acceptRequest(_ track: Track) {
+        session?.queue.append(track)
+    }
+
+    func skipToNext() {
+        guard let queue = session?.queue, !queue.isEmpty else { return }
+        session?.currentTrack = queue.first
+        session?.queue = Array(queue.dropFirst())
+    }
+
+    func changeDJMode(_ mode: DJMode) {
+        session?.djMode = mode
+    }
+
+    func setDJ(_ userID: UserID) {
+        session?.djUserID = userID
+    }
+
+    func removeMember(_ userID: UserID) {
+        session?.members.removeAll { $0.id == userID }
+    }
+
+    func addMember(_ member: Session.Member) {
+        guard session?.members.contains(where: { $0.id == member.id }) != true else { return }
+        session?.members.append(member)
+    }
+
+    func clearCurrentTrack() {
+        session?.currentTrack = nil
+    }
+
+    func endSession() {
+        session = nil
+    }
+
+    func setHotSeatSongsPerDJ(_ count: Int) {
+        session?.hotSeatSongsPerDJ = count
     }
 }
 
