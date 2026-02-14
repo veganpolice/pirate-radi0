@@ -9,6 +9,7 @@ struct BeatPulseBackground: View {
     @State private var bpm: Double = 128
     @State private var breathePhase: Bool = false
     @State private var ringTrigger: Int = 0
+    @State private var ringOriginX: CGFloat = -0.05
 
     private var beatInterval: Double { 60.0 / bpm }
 
@@ -26,7 +27,8 @@ struct BeatPulseBackground: View {
 
     var body: some View {
         GeometryReader { geo in
-            let center = CGPoint(x: geo.size.width * 0.35, y: geo.size.height * 0.28)
+            // Ring origin tracks the pirate ship's position
+            let ringCenter = CGPoint(x: ringOriginX * geo.size.width, y: geo.size.height * 0.65)
 
             ZStack {
                 // Layer 1: Large warped blobs that fill the screen
@@ -60,10 +62,10 @@ struct BeatPulseBackground: View {
                     index: 2
                 )
 
-                // Layer 2: Slow expanding rings
+                // Layer 2: Slow expanding rings from ship position
                 ForEach(0..<3, id: \.self) { i in
                     SlowPulseRing(
-                        center: center,
+                        center: ringCenter,
                         color: i.isMultiple(of: 2) ? zoneColor : secondaryColor,
                         delay: Double(i) * 2.0,
                         isPlaying: isPlaying,
@@ -99,6 +101,16 @@ struct BeatPulseBackground: View {
                 // Trigger ring every few breaths
                 ringTrigger += 1
                 try? await Task.sleep(for: .seconds(Double.random(in: 6...10)))
+            }
+        }
+        .task {
+            // Mirror the pirate ship's 18-second sail across
+            while !Task.isCancelled {
+                ringOriginX = -0.05
+                withAnimation(.linear(duration: 18)) {
+                    ringOriginX = 1.05
+                }
+                try? await Task.sleep(for: .seconds(18))
             }
         }
     }
