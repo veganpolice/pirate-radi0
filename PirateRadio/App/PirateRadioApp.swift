@@ -3,13 +3,14 @@ import SwiftUI
 @main
 struct PirateRadioApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     @State private var authManager: SpotifyAuthManager
     @State private var sessionStore: SessionStore?
     @State private var toastManager = ToastManager()
     @State private var mockTimerManager = MockTimerManager()
 
     /// Set to true to bypass Spotify auth and explore the UI with mock data.
-    static let demoMode = true
+    static let demoMode = false
 
     init() {
         let auth = SpotifyAuthManager()
@@ -51,6 +52,24 @@ struct PirateRadioApp: App {
                 .environment(authManager)
                 .environment(toastManager)
                 .environment(mockTimerManager)
+                .onChange(of: scenePhase) { _, phase in
+                    switch phase {
+                    case .active:
+                        if authManager.isAuthenticated && !Self.demoMode {
+                            authManager.connectAppRemote()
+                        }
+                    case .background:
+                        if !Self.demoMode {
+                            authManager.disconnectAppRemote()
+                        }
+                    default:
+                        break
+                    }
+                }
+                .onAppear {
+                    // Wire auth manager to AppDelegate for URL callbacks
+                    appDelegate.authManager = authManager
+                }
         }
     }
 

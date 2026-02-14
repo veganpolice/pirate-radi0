@@ -2,6 +2,7 @@ import Foundation
 import AuthenticationServices
 import Security
 import CryptoKit
+import SpotifyiOS
 import os
 
 private let logger = Logger(subsystem: "com.pirateradio", category: "SpotifyAuth")
@@ -9,7 +10,7 @@ private let logger = Logger(subsystem: "com.pirateradio", category: "SpotifyAuth
 /// Manages Spotify OAuth/PKCE authentication with secure Keychain token storage.
 @Observable
 @MainActor
-final class SpotifyAuthManager {
+final class SpotifyAuthManager: NSObject {
     // MARK: - Configuration
 
     /// Set these in your Spotify Developer Dashboard
@@ -21,7 +22,26 @@ final class SpotifyAuthManager {
         "user-read-currently-playing",
         "user-read-private",
         "streaming",
+        "app-remote-control",
     ].joined(separator: " ")
+
+    // MARK: - App Remote
+
+    /// SPTAppRemote for controlling Spotify playback on device.
+    /// ObservationIgnored because @Observable doesn't support lazy stored properties.
+    @ObservationIgnored
+    private(set) lazy var appRemote: SPTAppRemote = {
+        let config = SPTConfiguration(
+            clientID: Self.clientID,
+            redirectURL: URL(string: Self.redirectURI)!
+        )
+        let remote = SPTAppRemote(configuration: config, logLevel: .debug)
+        remote.delegate = self
+        return remote
+    }()
+
+    /// Whether SPTAppRemote is connected to the Spotify app.
+    private(set) var isConnectedToSpotifyApp = false
 
     // MARK: - State
 
@@ -41,7 +61,8 @@ final class SpotifyAuthManager {
 
     // MARK: - Init
 
-    init() {
+    override init() {
+        super.init()
         loadTokensFromKeychain()
         if accessToken != nil {
             isAuthenticated = true
@@ -143,6 +164,9 @@ final class SpotifyAuthManager {
 
         await refreshUserProfile()
         isAuthenticated = true
+
+        // Connect to Spotify app for playback control
+        connectAppRemote()
     }
 
     private func exchangeCodeForTokens(code: String, verifier: String) async throws -> TokenResponse {
@@ -223,6 +247,31 @@ final class SpotifyAuthManager {
         isPremium = true
         displayName = "DJ Powder"
         userID = "demo-user-1"
+    }
+
+    // MARK: - App Remote Connection
+
+    /// Connect to the Spotify app for playback control.
+    /// Reuses the PKCE access token — no separate auth flow needed.
+    func connectAppRemote() {
+        guard let token = accessToken else {
+            logger.warning("Cannot connect App Remote: no access token")
+            return
+        }
+        appRemote.connectionParameters.accessToken = token
+        appRemote.connect()
+    }
+
+    /// Disconnect from the Spotify app (call when entering background).
+    func disconnectAppRemote() {
+        if appRemote.isConnected {
+            appRemote.disconnect()
+        }
+    }
+
+    /// Handle URL callback from Spotify app (for App Remote auth flow).
+    func handleAppRemoteURL(_ url: URL) {
+        appRemote.authorizationParameters(from: url)
     }
 
     // MARK: - PKCE
@@ -348,6 +397,31 @@ private struct SpotifyProfile: Codable {
 private final class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         ASPresentationAnchor()
+    }
+}
+
+// MARK: - SPTAppRemoteDelegate
+
+extension SpotifyAuthManager: SPTAppRemoteDelegate {
+    nonisolated func appRemoteDidEstablishConnection(_ appRemote: SPTAppRemote) {
+        Task { @MainActor in
+            logger.notice("SPTAppRemote connected to Spotify app")
+            self.isConnectedToSpotifyApp = true
+        }
+    }
+
+    nonisolated func appRemote(_ appRemote: SPTAppRemote, didFailConnectionAttemptWithError error: (any Error)?) {
+        Task { @MainActor in
+            logger.error("SPTAppRemote connection failed: \(error?.localizedDescription ?? "unknown")")
+            self.isConnectedToSpotifyApp = false
+        }
+    }
+
+    nonisolated func appRemote(_ appRemote: SPTAppRemote, didDisconnectWithError error: (any Error)?) {
+        Task { @MainActor in
+            logger.info("SPTAppRemote disconnected: \(error?.localizedDescription ?? "user action")")
+            self.isConnectedToSpotifyApp = false
+        }
     }
 }
 

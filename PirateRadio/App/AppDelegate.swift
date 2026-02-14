@@ -2,11 +2,24 @@ import UIKit
 import AVFoundation
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    /// Reference to auth manager, set from PirateRadioApp.
+    var authManager: SpotifyAuthManager?
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         configureAudioSession()
+        return true
+    }
+
+    /// Handle deep link callbacks (pirate-radio://auth/callback).
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        authManager?.handleAppRemoteURL(url)
         return true
     }
 
@@ -22,5 +35,4 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             print("[PirateRadio] Failed to configure audio session: \(error)")
         }
     }
-
 }
