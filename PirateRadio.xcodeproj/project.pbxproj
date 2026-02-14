@@ -1,0 +1,670 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0E51A73813B064989A3D2D9F /* SpotifyiOS in Frameworks */ = {isa = PBXBuildFile; productRef = C53D3164140A589F24A57C37 /* SpotifyiOS */; };
+		1236952CEE88CE9030E31FD4 /* MusicSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D7BDA6F7912995007E65EE2 /* MusicSource.swift */; };
+		2F58E8039C295B038D93EE6F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACFBFA27C23C7AB6F0C857F /* AppDelegate.swift */; };
+		3841354410B4BBA56538044D /* Kronos in Frameworks */ = {isa = PBXBuildFile; productRef = 808F79ADA3F3C0F7A40DC874 /* Kronos */; };
+		548613E89C576931E5791F2A /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E36B2DD0E2E2D8527ED28D /* Session.swift */; };
+		5548F697F29F935C8CB3E3E7 /* SessionTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930F0CA3C4206C3B520DED51 /* SessionTransport.swift */; };
+		638A5900605DBD082F5145A1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C30F0DAFC947BDA1AE8BD995 /* Assets.xcassets */; };
+		6434BC5AA0A917709EA8F069 /* SpotifyAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15BEE3A88814DC1FBECEA3A /* SpotifyAuth.swift */; };
+		6760506C519822D45A5D265A /* PirateRadioError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A84A72518AFAE7CD71F9A95 /* PirateRadioError.swift */; };
+		6AF281A182256CE06A16853B /* ClockProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3300E55067FB25A93B553D1C /* ClockProvider.swift */; };
+		6D97E4AFD011DA8D0458B756 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72354CBBD5BF61C4BA07752D /* Track.swift */; };
+		7722322289D59F2D65D35894 /* SpotifyAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29613A51683EAA6F8E721402 /* SpotifyAuthView.swift */; };
+		796CF29D034ADEFCB8757CC7 /* SpotifyPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7A9CA2C320EA8B272E851A /* SpotifyPlayer.swift */; };
+		A319CAEB80C6DAD005E19208 /* GloveButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */; };
+		A89C4FA5BAF357BF0445FD01 /* SyncCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D358A247C684183CB4B21 /* SyncCommand.swift */; };
+		C11006D43C61A02C4CA80A68 /* PirateRadioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87415D7E21E29074C898BD5 /* PirateRadioApp.swift */; };
+		C272F9E948BD5979306D92A7 /* PirateRadioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */; };
+		D15F4F4C128F9A7E9AB670F1 /* SpotifyClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D3F3191E8157F52BCC3CD6 /* SpotifyClient.swift */; };
+		EBDEB57FD74A698E940ECD1E /* PirateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286E17C8D1EE92CA55C94361 /* PirateTheme.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8243602317047DF660D213CE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 930517461237CEA23A4B9C71 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B269D12C404D7516F9366E3C;
+			remoteInfo = PirateRadio;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		227D358A247C684183CB4B21 /* SyncCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncCommand.swift; sourceTree = "<group>"; };
+		286E17C8D1EE92CA55C94361 /* PirateTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateTheme.swift; sourceTree = "<group>"; };
+		294850AD862E01D2FB15F322 /* PirateRadio.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PirateRadio.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		29613A51683EAA6F8E721402 /* SpotifyAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuthView.swift; sourceTree = "<group>"; };
+		3300E55067FB25A93B553D1C /* ClockProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockProvider.swift; sourceTree = "<group>"; };
+		34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioTests.swift; sourceTree = "<group>"; };
+		408B663AD10B9AE7F3377AFC /* PirateRadio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PirateRadio.entitlements; sourceTree = "<group>"; };
+		72354CBBD5BF61C4BA07752D /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
+		8D7BDA6F7912995007E65EE2 /* MusicSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicSource.swift; sourceTree = "<group>"; };
+		930F0CA3C4206C3B520DED51 /* SessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransport.swift; sourceTree = "<group>"; };
+		9A84A72518AFAE7CD71F9A95 /* PirateRadioError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioError.swift; sourceTree = "<group>"; };
+		A1720A39CC826635C5E5EC9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A9E36B2DD0E2E2D8527ED28D /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		AA7A9CA2C320EA8B272E851A /* SpotifyPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyPlayer.swift; sourceTree = "<group>"; };
+		AACFBFA27C23C7AB6F0C857F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		B62EF1958AA35C80900C20BF /* PirateRadioTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PirateRadioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C30F0DAFC947BDA1AE8BD995 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D3D3F3191E8157F52BCC3CD6 /* SpotifyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyClient.swift; sourceTree = "<group>"; };
+		D87415D7E21E29074C898BD5 /* PirateRadioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioApp.swift; sourceTree = "<group>"; };
+		F15BEE3A88814DC1FBECEA3A /* SpotifyAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuth.swift; sourceTree = "<group>"; };
+		FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GloveButton.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3FDF223E5AAD8EDBB82E20B9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0E51A73813B064989A3D2D9F /* SpotifyiOS in Frameworks */,
+				3841354410B4BBA56538044D /* Kronos in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		12262072FEF143759864C3C5 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				9A84A72518AFAE7CD71F9A95 /* PirateRadioError.swift */,
+				A9E36B2DD0E2E2D8527ED28D /* Session.swift */,
+				227D358A247C684183CB4B21 /* SyncCommand.swift */,
+				72354CBBD5BF61C4BA07752D /* Track.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		123AEF745C58392246F5283A = {
+			isa = PBXGroup;
+			children = (
+				6BFD64C7F10C138D617A3CEC /* PirateRadio */,
+				65EE5A4C7C5251D3674D747F /* PirateRadioTests */,
+				77C7484DAC1085E0B7399874 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		373785143A4F1F66F0F1D61D /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				C30F0DAFC947BDA1AE8BD995 /* Assets.xcassets */,
+				A1720A39CC826635C5E5EC9A /* Info.plist */,
+				408B663AD10B9AE7F3377AFC /* PirateRadio.entitlements */,
+				4679841189479BED8CF9C860 /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		4679841189479BED8CF9C860 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		50BA228F2617409C5AB38E99 /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Sync;
+			sourceTree = "<group>";
+		};
+		600BD29C0555472D101E9F3A /* Spotify */ = {
+			isa = PBXGroup;
+			children = (
+				F15BEE3A88814DC1FBECEA3A /* SpotifyAuth.swift */,
+				D3D3F3191E8157F52BCC3CD6 /* SpotifyClient.swift */,
+				AA7A9CA2C320EA8B272E851A /* SpotifyPlayer.swift */,
+			);
+			path = Spotify;
+			sourceTree = "<group>";
+		};
+		65EE5A4C7C5251D3674D747F /* PirateRadioTests */ = {
+			isa = PBXGroup;
+			children = (
+				34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */,
+			);
+			path = PirateRadioTests;
+			sourceTree = "<group>";
+		};
+		6BFD64C7F10C138D617A3CEC /* PirateRadio */ = {
+			isa = PBXGroup;
+			children = (
+				978159DFA0FB1EBA86B86E3B /* App */,
+				8801395A1EB8DACAB0736AF5 /* Core */,
+				CC51C68E337666B773E78A14 /* Features */,
+				373785143A4F1F66F0F1D61D /* Resources */,
+				9DCE23B272943204929F8096 /* UI */,
+			);
+			path = PirateRadio;
+			sourceTree = "<group>";
+		};
+		6F9DD8FFFF76A5322D822615 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		77C7484DAC1085E0B7399874 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				294850AD862E01D2FB15F322 /* PirateRadio.app */,
+				B62EF1958AA35C80900C20BF /* PirateRadioTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		7F3510E92DBA1F59085295CE /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */,
+				286E17C8D1EE92CA55C94361 /* PirateTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		8801395A1EB8DACAB0736AF5 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				12262072FEF143759864C3C5 /* Models */,
+				6F9DD8FFFF76A5322D822615 /* Networking */,
+				A07F6F6101B7F118D4A7D302 /* Protocols */,
+				600BD29C0555472D101E9F3A /* Spotify */,
+				50BA228F2617409C5AB38E99 /* Sync */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		905BE6B9FF952FF3EC82AE7C /* Components */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		916B24D62F56ED07F7339107 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		978159DFA0FB1EBA86B86E3B /* App */ = {
+			isa = PBXGroup;
+			children = (
+				AACFBFA27C23C7AB6F0C857F /* AppDelegate.swift */,
+				D87415D7E21E29074C898BD5 /* PirateRadioApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		9B4D081940A37FDB1EB08775 /* NowPlaying */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = NowPlaying;
+			sourceTree = "<group>";
+		};
+		9DCE23B272943204929F8096 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				A9E2EE0E85C8F745451C4F72 /* Auth */,
+				905BE6B9FF952FF3EC82AE7C /* Components */,
+				7F3510E92DBA1F59085295CE /* Theme */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		A07F6F6101B7F118D4A7D302 /* Protocols */ = {
+			isa = PBXGroup;
+			children = (
+				3300E55067FB25A93B553D1C /* ClockProvider.swift */,
+				8D7BDA6F7912995007E65EE2 /* MusicSource.swift */,
+				930F0CA3C4206C3B520DED51 /* SessionTransport.swift */,
+			);
+			path = Protocols;
+			sourceTree = "<group>";
+		};
+		A9E2EE0E85C8F745451C4F72 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				29613A51683EAA6F8E721402 /* SpotifyAuthView.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		CC51C68E337666B773E78A14 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				916B24D62F56ED07F7339107 /* Auth */,
+				9B4D081940A37FDB1EB08775 /* NowPlaying */,
+				D596530B396A6E15E959583E /* Session */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		D596530B396A6E15E959583E /* Session */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Session;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1003BE215F005B60FF54E48B /* PirateRadioTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 70AFFE683508E78A85A25934 /* Build configuration list for PBXNativeTarget "PirateRadioTests" */;
+			buildPhases = (
+				8618A4AC30C0A19E0274C2C3 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9533794AB422637F15591ACD /* PBXTargetDependency */,
+			);
+			name = PirateRadioTests;
+			packageProductDependencies = (
+			);
+			productName = PirateRadioTests;
+			productReference = B62EF1958AA35C80900C20BF /* PirateRadioTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B269D12C404D7516F9366E3C /* PirateRadio */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FD17EDB4675AD9A320D7114E /* Build configuration list for PBXNativeTarget "PirateRadio" */;
+			buildPhases = (
+				6C719C70DF46C7B83DF44CA3 /* Sources */,
+				A98D12ACC5BA4BED3E4EB3BC /* Resources */,
+				3FDF223E5AAD8EDBB82E20B9 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PirateRadio;
+			packageProductDependencies = (
+				C53D3164140A589F24A57C37 /* SpotifyiOS */,
+				808F79ADA3F3C0F7A40DC874 /* Kronos */,
+			);
+			productName = PirateRadio;
+			productReference = 294850AD862E01D2FB15F322 /* PirateRadio.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		930517461237CEA23A4B9C71 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					1003BE215F005B60FF54E48B = {
+						DevelopmentTeam = "";
+					};
+					B269D12C404D7516F9366E3C = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = E6097634D9EAA36AC3E0D17B /* Build configuration list for PBXProject "PirateRadio" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 123AEF745C58392246F5283A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AF19C8E0B736DE2F45EFF5CA /* XCRemoteSwiftPackageReference "Kronos" */,
+				AB49BDE594D03573DA8AAD31 /* XCRemoteSwiftPackageReference "ios-sdk" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B269D12C404D7516F9366E3C /* PirateRadio */,
+				1003BE215F005B60FF54E48B /* PirateRadioTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A98D12ACC5BA4BED3E4EB3BC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				638A5900605DBD082F5145A1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6C719C70DF46C7B83DF44CA3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2F58E8039C295B038D93EE6F /* AppDelegate.swift in Sources */,
+				6AF281A182256CE06A16853B /* ClockProvider.swift in Sources */,
+				A319CAEB80C6DAD005E19208 /* GloveButton.swift in Sources */,
+				1236952CEE88CE9030E31FD4 /* MusicSource.swift in Sources */,
+				C11006D43C61A02C4CA80A68 /* PirateRadioApp.swift in Sources */,
+				6760506C519822D45A5D265A /* PirateRadioError.swift in Sources */,
+				EBDEB57FD74A698E940ECD1E /* PirateTheme.swift in Sources */,
+				548613E89C576931E5791F2A /* Session.swift in Sources */,
+				5548F697F29F935C8CB3E3E7 /* SessionTransport.swift in Sources */,
+				6434BC5AA0A917709EA8F069 /* SpotifyAuth.swift in Sources */,
+				7722322289D59F2D65D35894 /* SpotifyAuthView.swift in Sources */,
+				D15F4F4C128F9A7E9AB670F1 /* SpotifyClient.swift in Sources */,
+				796CF29D034ADEFCB8757CC7 /* SpotifyPlayer.swift in Sources */,
+				A89C4FA5BAF357BF0445FD01 /* SyncCommand.swift in Sources */,
+				6D97E4AFD011DA8D0458B756 /* Track.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8618A4AC30C0A19E0274C2C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C272F9E948BD5979306D92A7 /* PirateRadioTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9533794AB422637F15591ACD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B269D12C404D7516F9366E3C /* PirateRadio */;
+			targetProxy = 8243602317047DF660D213CE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		5301F28A99936A421345F65F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		5749DBEABE26A4D68494BAF8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PirateRadio/Resources/PirateRadio.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = PirateRadio/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.pirateradio.app;
+				SDKROOT = iphoneos;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+				UILaunchScreen = {
+					UIColorName = "";
+					UIImageName = "";
+				};
+			};
+			name = Release;
+		};
+		7F3969A1D66770B51682402B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		9CAB502B073CB5A5A7E927AE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.pirateradio.PirateRadioTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PirateRadio.app/PirateRadio";
+			};
+			name = Release;
+		};
+		D65120C8A9B54FEC48EDE326 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PirateRadio/Resources/PirateRadio.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = PirateRadio/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.pirateradio.app;
+				SDKROOT = iphoneos;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+				UILaunchScreen = {
+					UIColorName = "";
+					UIImageName = "";
+				};
+			};
+			name = Debug;
+		};
+		F35A6B1A9AA5F3F66E1A8AE9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.pirateradio.PirateRadioTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PirateRadio.app/PirateRadio";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		70AFFE683508E78A85A25934 /* Build configuration list for PBXNativeTarget "PirateRadioTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F35A6B1A9AA5F3F66E1A8AE9 /* Debug */,
+				9CAB502B073CB5A5A7E927AE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E6097634D9EAA36AC3E0D17B /* Build configuration list for PBXProject "PirateRadio" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5301F28A99936A421345F65F /* Debug */,
+				7F3969A1D66770B51682402B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FD17EDB4675AD9A320D7114E /* Build configuration list for PBXNativeTarget "PirateRadio" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D65120C8A9B54FEC48EDE326 /* Debug */,
+				5749DBEABE26A4D68494BAF8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AB49BDE594D03573DA8AAD31 /* XCRemoteSwiftPackageReference "ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/spotify/ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.1;
+			};
+		};
+		AF19C8E0B736DE2F45EFF5CA /* XCRemoteSwiftPackageReference "Kronos" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/MobileNativeFoundation/Kronos";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.2.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		808F79ADA3F3C0F7A40DC874 /* Kronos */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AF19C8E0B736DE2F45EFF5CA /* XCRemoteSwiftPackageReference "Kronos" */;
+			productName = Kronos;
+		};
+		C53D3164140A589F24A57C37 /* SpotifyiOS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AB49BDE594D03573DA8AAD31 /* XCRemoteSwiftPackageReference "ios-sdk" */;
+			productName = SpotifyiOS;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 930517461237CEA23A4B9C71 /* Project object */;
+}

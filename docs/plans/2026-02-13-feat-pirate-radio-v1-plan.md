@@ -326,28 +326,28 @@ The original plan had 25+ source files. Reduced to ~15 for MVP:
 
 **Goal:** Spotify auth works, playback control works, background execution validated. These are the three platform risks that could block everything.
 
-- [ ] Create Xcode project with SwiftUI, iOS 17+ target — `PirateRadioApp.swift`
-- [ ] Set up SPM dependencies: SpotifyiOS SDK, Kronos
-- [ ] Define `MusicSource`, `SessionTransport`, `ClockProvider` protocols — `Core/Protocols/`
-- [ ] Implement Spotify OAuth/PKCE flow with Keychain token storage — `SpotifyAuth.swift`
+- [x] Create Xcode project with SwiftUI, iOS 17+ target — `PirateRadioApp.swift`
+- [x] Set up SPM dependencies: SpotifyiOS SDK, Kronos
+- [x] Define `MusicSource`, `SessionTransport`, `ClockProvider` protocols — `Core/Protocols/`
+- [x] Implement Spotify OAuth/PKCE flow with Keychain token storage — `SpotifyAuth.swift`
   - Use `SecRandomCopyBytes` for PKCE `code_verifier` (43-128 chars, cryptographically random)
   - Store access + refresh tokens in iOS Keychain (`kSecAttrAccessibleAfterFirstUnlock`)
   - Implement proactive token refresh at 80% of expiry (not on 401 error)
   - Universal Link for redirect URI (not custom URL scheme — prevents interception)
-- [ ] Verify Premium status at login via Web API `GET /v1/me` → `product == "premium"` — `SpotifyAuth.swift`
-- [ ] Build login screen with clear Premium requirement messaging — `SpotifyAuthView.swift`
-- [ ] Wrap SpotifyiOS App Remote as state machine — `SpotifyPlayer.swift`
+- [x] Verify Premium status at login via Web API `GET /v1/me` → `product == "premium"` — `SpotifyAuth.swift`
+- [x] Build login screen with clear Premium requirement messaging — `SpotifyAuthView.swift`
+- [x] Wrap SpotifyiOS App Remote as state machine — `SpotifyPlayer.swift`
   - States: IDLE → PREPARING → WAITING_FOR_CALLBACK → PLAYING
   - 3-second timeout on WAITING_FOR_CALLBACK
   - Serialized through single dispatch queue
   - Measure play() → callback latency for sync calibration
-- [ ] Wrap Spotify Web API for track search — `SpotifyClient.swift`
-- [ ] **CRITICAL: Prototype background execution** — `AppDelegate.swift`
+- [x] Wrap Spotify Web API for track search — `SpotifyClient.swift`
+- [x] **CRITICAL: Prototype background execution** — `AppDelegate.swift`
   - Configure `AVAudioSession` with `.playback` category
   - Test: does the app stay alive when screen locks while Spotify plays?
   - If not: implement silent audio session (play inaudible audio to maintain background privilege)
   - This must work or the sync engine dies when the screen locks
-- [ ] Handle error states: Spotify not installed, not logged in, not Premium
+- [x] Handle error states: Spotify not installed, not logged in, not Premium — `PirateRadioError.swift`
 - [ ] Verify: user can log in, search, play, and app stays alive when backgrounded
 
 **Success criteria:** Single device works end-to-end. Background execution confirmed. Token refresh works. These are the make-or-break validations.
