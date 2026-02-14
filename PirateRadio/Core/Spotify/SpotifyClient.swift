@@ -60,6 +60,19 @@ actor SpotifyClient {
         )
     }
 
+    // MARK: - Audio Features
+
+    func fetchAudioFeatures(trackID: String) async throws -> AudioFeatures {
+        let token = try await authManager.getAccessToken()
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/audio-features/\(trackID)")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+
+        return try JSONDecoder().decode(AudioFeatures.self, from: data)
+    }
+
     // MARK: - Helpers
 
     private func validateResponse(_ response: URLResponse) throws {
@@ -112,4 +125,16 @@ private struct SpotifyImage: Codable {
     let url: String
     let width: Int?
     let height: Int?
+}
+
+// MARK: - Audio Features Response
+
+struct AudioFeatures: Codable, Sendable {
+    let tempo: Double           // BPM, e.g. 120.0
+    let timeSignature: Int      // Beats per bar, e.g. 4
+
+    enum CodingKeys: String, CodingKey {
+        case tempo
+        case timeSignature = "time_signature"
+    }
 }

@@ -7,6 +7,7 @@ struct Track: Codable, Sendable, Identifiable, Equatable {
     let albumName: String
     let albumArtURL: URL?
     let durationMs: Int
+    var bpm: Double?        // Tempo from Spotify audio features, cached per track
 
     var durationFormatted: String {
         let seconds = durationMs / 1000

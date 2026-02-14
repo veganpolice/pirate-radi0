@@ -49,6 +49,7 @@ actor SyncEngine {
         case memberLeft(UserID)
         case connectionStateChanged(ConnectionState)
         case syncStatus(SyncStatus)
+        case anchorUpdated(NTPAnchoredPosition, clockOffsetMs: Int64)
     }
 
     enum SyncStatus: Sendable {
@@ -265,13 +266,16 @@ actor SyncEngine {
             playLatencySamples.append(elapsed)
         }
 
-        currentAnchor = NTPAnchoredPosition(
+        let anchor = NTPAnchoredPosition(
             trackID: trackID,
             positionAtAnchor: Double(positionMs) / 1000.0,
             ntpAnchor: startAtNtp,
             playbackRate: 1.0
         )
+        currentAnchor = anchor
 
+        let offsetMs = Int64(clock.estimatedOffset.seconds * 1000)
+        onSessionUpdate?(.anchorUpdated(anchor, clockOffsetMs: offsetMs))
         onSessionUpdate?(.playbackStateChanged(isPlaying: true, positionMs: positionMs))
     }
 
@@ -379,12 +383,16 @@ actor SyncEngine {
             startDriftChecking()
         }
 
-        currentAnchor = NTPAnchoredPosition(
+        let anchor = NTPAnchoredPosition(
             trackID: trackID,
             positionAtAnchor: snapshot.positionAtAnchor,
             ntpAnchor: snapshot.ntpAnchor,
             playbackRate: snapshot.playbackRate
         )
+        currentAnchor = anchor
+
+        let offsetMs = Int64(clock.estimatedOffset.seconds * 1000)
+        onSessionUpdate?(.anchorUpdated(anchor, clockOffsetMs: offsetMs))
     }
 
     // MARK: - Connection Monitoring

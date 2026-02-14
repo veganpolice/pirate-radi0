@@ -37,6 +37,7 @@
 		D877D1A1200F636F20A5F894 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 358DBF75544F644C797C711E /* SyncEngine.swift */; };
 		DD43C9013B4D08E85474446D /* SessionLobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8CBC3E502740119B63125A /* SessionLobbyView.swift */; };
 		DFD8A3E9EE29DE39455C7F87 /* CRTStaticOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */; };
+		35F5E6FE08704C83B98E78A9 /* BeatVisualizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47196E24A2C948DA824F7E15 /* BeatVisualizer.swift */; };
 		EBDEB57FD74A698E940ECD1E /* PirateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286E17C8D1EE92CA55C94361 /* PirateTheme.swift */; };
 /* End PBXBuildFile section */
 
@@ -83,6 +84,7 @@
 		D87415D7E21E29074C898BD5 /* PirateRadioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioApp.swift; sourceTree = "<group>"; };
 		F15BEE3A88814DC1FBECEA3A /* SpotifyAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuth.swift; sourceTree = "<group>"; };
 		F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRTStaticOverlay.swift; sourceTree = "<group>"; };
+		47196E24A2C948DA824F7E15 /* BeatVisualizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeatVisualizer.swift; sourceTree = "<group>"; };
 		FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GloveButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -230,6 +232,7 @@
 			isa = PBXGroup;
 			children = (
 				F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */,
+				47196E24A2C948DA824F7E15 /* BeatVisualizer.swift */,
 				23040DFEF11900C2500B646D /* FrequencyDial.swift */,
 			);
 			path = Components;
@@ -416,6 +419,7 @@
 			files = (
 				2F58E8039C295B038D93EE6F /* AppDelegate.swift in Sources */,
 				DFD8A3E9EE29DE39455C7F87 /* CRTStaticOverlay.swift in Sources */,
+				35F5E6FE08704C83B98E78A9 /* BeatVisualizer.swift in Sources */,
 				6AF281A182256CE06A16853B /* ClockProvider.swift in Sources */,
 				0563BA982041A6F9AAE0FEA2 /* CreateSessionView.swift in Sources */,
 				95E251D4BF3808924614D9D8 /* FrequencyDial.swift in Sources */,

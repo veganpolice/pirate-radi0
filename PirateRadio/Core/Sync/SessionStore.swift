@@ -13,6 +13,11 @@ final class SessionStore {
     private(set) var isLoading = false
     private(set) var error: PirateRadioError?
 
+    // Beat visualizer state
+    private(set) var currentBPM: Double?
+    private(set) var currentAnchor: NTPAnchoredPosition?
+    private(set) var clockOffsetMs: Int64 = 0
+
     // MARK: - Dependencies
 
     private var syncEngine: SyncEngine?
@@ -24,6 +29,48 @@ final class SessionStore {
     init(authManager: SpotifyAuthManager, baseURL: URL = URL(string: "https://pirate-radio-sync.fly.dev")!) {
         self.authManager = authManager
         self.baseURL = baseURL
+    }
+
+    // MARK: - Demo Mode
+
+    static func demo() -> SessionStore {
+        let auth = SpotifyAuthManager()
+        auth.enableDemoMode()
+        let store = SessionStore(authManager: auth)
+        store.connectionState = .connected
+        store.currentBPM = 120.0
+        store.currentAnchor = NTPAnchoredPosition(
+            trackID: "7GhIk7Il098yCjg4BQjzvb",
+            positionAtAnchor: 0,
+            ntpAnchor: UInt64(Date().timeIntervalSince1970 * 1000),
+            playbackRate: 1.0
+        )
+        store.session = Session(
+            id: "demo-session",
+            joinCode: "1073",
+            creatorID: "demo-user-1",
+            djUserID: "demo-user-1",
+            members: [
+                Session.Member(id: "demo-user-1", displayName: "DJ Powder", isConnected: true),
+                Session.Member(id: "demo-user-2", displayName: "Shredder", isConnected: true),
+                Session.Member(id: "demo-user-3", displayName: "Avalanche", isConnected: true),
+            ],
+            queue: [
+                Track(id: "4PTG3Z6ehGkBFwjybzWkR8", name: "Bohemian Rhapsody", artist: "Queen", albumName: "A Night at the Opera", albumArtURL: URL(string: "https://i.scdn.co/image/ab67616d0000b273ce4f1737bc8a646c8c4bd25a"), durationMs: 354_947),
+                Track(id: "3n3Ppam7vgaVa1iaRUc9Lp", name: "Mr. Brightside", artist: "The Killers", albumName: "Hot Fuss", albumArtURL: URL(string: "https://i.scdn.co/image/ab67616d0000b273ccdddd46119a4ff53eaf1f5a"), durationMs: 222_200),
+            ],
+            currentTrack: Track(
+                id: "7GhIk7Il098yCjg4BQjzvb",
+                name: "Never Gonna Give You Up",
+                artist: "Rick Astley",
+                albumName: "Whenever You Need Somebody",
+                albumArtURL: URL(string: "https://i.scdn.co/image/ab67616d0000b27315b2e54b00ef29ab852a09a0"),
+                durationMs: 213_573
+            ),
+            isPlaying: true,
+            epoch: 1
+        )
+        return store
     }
 
     // MARK: - Actions
@@ -111,6 +158,37 @@ final class SessionStore {
         try? await syncEngine?.djSeek(to: positionMs)
     }
 
+    // MARK: - Beat Visualizer
+
+    /// Computes current playback position in seconds from the NTP-anchored system.
+    /// Used by BeatVisualizer to derive beat phase each frame.
+    func currentPlaybackPosition(at date: Date) -> Double {
+        guard let anchor = currentAnchor else { return 0 }
+        let ntpNow = UInt64(date.timeIntervalSince1970 * 1000) + UInt64(max(0, clockOffsetMs))
+        return anchor.positionAt(ntpTime: ntpNow)
+    }
+
+    private var spotifyClient: SpotifyClient? {
+        SpotifyClient(authManager: authManager)
+    }
+
+    private func fetchBPMForTrack(_ trackID: String) async {
+        // Check if current track already has BPM cached
+        if let bpm = session?.currentTrack?.bpm, bpm > 0 {
+            currentBPM = bpm
+            return
+        }
+
+        guard let client = spotifyClient else { return }
+        do {
+            let features = try await client.fetchAudioFeatures(trackID: trackID)
+            currentBPM = features.tempo
+            session?.currentTrack?.bpm = features.tempo
+        } catch {
+            currentBPM = nil
+        }
+    }
+
     // MARK: - Private
 
     private func connectToSession(sessionID: String, token: String) async throws {
@@ -145,8 +223,16 @@ final class SessionStore {
             session?.members.removeAll { $0.id == userID }
         case .queueUpdated:
             break // Queue updates handled separately
-        case .trackChanged:
-            break
+        case .anchorUpdated(let anchor, let offsetMs):
+            currentAnchor = anchor
+            clockOffsetMs = offsetMs
+        case .trackChanged(let track):
+            session?.currentTrack = track
+            if let track {
+                Task { await fetchBPMForTrack(track.id) }
+            } else {
+                currentBPM = nil
+            }
         }
     }
 
