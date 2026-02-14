@@ -1,0 +1,7 @@
+node_modules
+.git
+.gitignore
+*.md
+test.js
+fly.toml
+.dockerignore

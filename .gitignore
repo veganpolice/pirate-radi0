@@ -32,6 +32,9 @@ Pods/
 .idea/
 *.hmap
 
+# Node
+node_modules/
+
 # Secrets
 *.env
 credentials.json
