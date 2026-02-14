@@ -96,6 +96,12 @@ struct NowPlayingView: View {
 
             Spacer()
 
+            // Neon pirate ship sailing between mountains
+            NeonPirateScene(color: PirateTheme.signal)
+                .padding(.horizontal, 8)
+
+            Spacer()
+
             // Crew strip
             if showCrew {
                 crewStrip

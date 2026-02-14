@@ -30,6 +30,7 @@
 		6D97E4AFD011DA8D0458B756 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72354CBBD5BF61C4BA07752D /* Track.swift */; };
 		7722322289D59F2D65D35894 /* SpotifyAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29613A51683EAA6F8E721402 /* SpotifyAuthView.swift */; };
 		796CF29D034ADEFCB8757CC7 /* SpotifyPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7A9CA2C320EA8B272E851A /* SpotifyPlayer.swift */; };
+		8DB3034EF0B70A0F99049299 /* NeonPirateScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEFD32B86E4A92D828E16B /* NeonPirateScene.swift */; };
 		8EE5D3B86E80783256EABC05 /* MockTimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39327321C704C4463A676297 /* MockTimerManager.swift */; };
 		95E251D4BF3808924614D9D8 /* FrequencyDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23040DFEF11900C2500B646D /* FrequencyDial.swift */; };
 		9773CCB1A608195927C200A6 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E03792B7C201F38351FE541 /* MockData.swift */; };
@@ -94,6 +95,7 @@
 		695D4EC6D5CCEFEC511B2BB2 /* SessionRecapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecapView.swift; sourceTree = "<group>"; };
 		6F73EDEFF80F51A9FFEA6036 /* DiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
 		72354CBBD5BF61C4BA07752D /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
+		86EEFD32B86E4A92D828E16B /* NeonPirateScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeonPirateScene.swift; sourceTree = "<group>"; };
 		8A9B5FE362F9E711146E853E /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		8D7BDA6F7912995007E65EE2 /* MusicSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicSource.swift; sourceTree = "<group>"; };
 		930F0CA3C4206C3B520DED51 /* SessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransport.swift; sourceTree = "<group>"; };
@@ -285,6 +287,7 @@
 				50858029E4349C69A37E144C /* ConnectionStatusBadge.swift */,
 				F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */,
 				23040DFEF11900C2500B646D /* FrequencyDial.swift */,
+				86EEFD32B86E4A92D828E16B /* NeonPirateScene.swift */,
 				D7602EDD6BC60A82E0754A3B /* ToastManager.swift */,
 				C33C3112283966EE1D927A76 /* TrackProgressBar.swift */,
 				DD902CFB43ED0E40F25AF39C /* VinylArtView.swift */,
@@ -514,6 +517,7 @@
 				9773CCB1A608195927C200A6 /* MockData.swift in Sources */,
 				8EE5D3B86E80783256EABC05 /* MockTimerManager.swift in Sources */,
 				1236952CEE88CE9030E31FD4 /* MusicSource.swift in Sources */,
+				8DB3034EF0B70A0F99049299 /* NeonPirateScene.swift in Sources */,
 				4798A78E07883E930AC99E82 /* NowPlayingBridge.swift in Sources */,
 				1C3C82B031A3FA11A4FE2211 /* NowPlayingView.swift in Sources */,
 				9FC7243462ED1F5990FB958E /* OnboardingView.swift in Sources */,
