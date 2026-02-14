@@ -51,12 +51,13 @@ struct PirateRadioTests {
     func ntpAnchoredPosition() {
         let anchor = NTPAnchoredPosition(
             trackID: "track-1",
-            positionMs: 10_000,
-            ntpTimestamp: 1_000_000
+            positionAtAnchor: 10.0,
+            ntpAnchor: 1_000_000,
+            playbackRate: 1.0
         )
-        // 500ms later, position should be 10500ms
+        // 500ms later, position should be 10.5s
         let position = anchor.positionAt(ntpTime: 1_000_500)
-        #expect(position == 10_500)
+        #expect(position == 10.5)
     }
 
     @Test("PirateRadioError descriptions are non-empty")

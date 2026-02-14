@@ -31,9 +31,6 @@ targets:
         CODE_SIGN_STYLE: Automatic
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: false
-        UILaunchScreen:
-          UIColorName: ""
-          UIImageName: ""
     entitlements:
       path: PirateRadio/Resources/PirateRadio.entitlements
     dependencies:
@@ -48,6 +45,9 @@ targets:
     platform: iOS
     sources:
       - PirateRadioTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: PirateRadio
 

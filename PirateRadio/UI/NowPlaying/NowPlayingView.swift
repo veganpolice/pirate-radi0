@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// The main now-playing screen shown during an active session.
-/// Asymmetric layout: album art upper-left, track title overlapping in neon,
-/// crew list as horizontal strip, DJ controls at bottom.
+/// Beat visualizer as hero element, track info below, crew strip, controls at bottom.
 struct NowPlayingView: View {
     @Environment(SessionStore.self) private var sessionStore
 
@@ -14,8 +13,14 @@ struct NowPlayingView: View {
             PirateTheme.void.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Album art + track info
-                trackHeader
+                // Beat visualizer (replaces album art)
+                BeatVisualizer()
+                    .frame(height: 240)
+                    .padding(.top, 16)
+
+                // Track info below visualizer
+                trackInfo
+                    .padding(.top, 12)
 
                 Spacer()
 
@@ -42,55 +47,23 @@ struct NowPlayingView: View {
         }
     }
 
-    // MARK: - Track Header
+    // MARK: - Track Info
 
-    private var trackHeader: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Album art
-            if let track = sessionStore.session?.currentTrack,
-               let url = track.albumArtURL {
-                AsyncImage(url: url) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(PirateTheme.signal.opacity(0.1))
-                }
-                .frame(width: 200, height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .neonGlow(PirateTheme.signal, intensity: 0.3)
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(PirateTheme.signal.opacity(0.05))
-                    .frame(width: 200, height: 200)
-                    .overlay {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                            .font(.system(size: 48))
-                            .foregroundStyle(PirateTheme.signal.opacity(0.3))
-                    }
-            }
-
-            Spacer()
-        }
-        .overlay(alignment: .bottomTrailing) {
-            // Track title overlapping art
+    private var trackInfo: some View {
+        VStack(spacing: 4) {
             if let track = sessionStore.session?.currentTrack {
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(track.name)
-                        .font(PirateTheme.display(20))
-                        .foregroundStyle(PirateTheme.signal)
-                        .neonGlow(PirateTheme.signal, intensity: 0.5)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.trailing)
+                Text(track.name)
+                    .font(PirateTheme.display(20))
+                    .foregroundStyle(PirateTheme.signal)
+                    .neonGlow(PirateTheme.signal, intensity: 0.5)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
 
-                    Text(track.artist)
-                        .font(PirateTheme.body(14))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-                .padding(.trailing, 8)
-                .padding(.bottom, 8)
+                Text(track.artist)
+                    .font(PirateTheme.body(14))
+                    .foregroundStyle(.white.opacity(0.6))
             }
         }
-        .padding(.top, 16)
     }
 
     // MARK: - Crew Strip
