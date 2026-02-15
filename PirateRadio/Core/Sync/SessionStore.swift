@@ -8,6 +8,7 @@ final class SessionStore {
     // MARK: - State
 
     private(set) var session: Session?
+    private(set) var isCreator = false
     private(set) var connectionState: ConnectionState = .disconnected
     private(set) var syncStatus: SyncEngine.SyncStatus = .synced
     private(set) var isLoading = false
@@ -29,16 +30,23 @@ final class SessionStore {
     // MARK: - Actions
 
     func createSession() async {
+        guard !isLoading, session == nil else { return } // Prevent double-create
         isLoading = true
         error = nil
 
         do {
+            print("[SessionStore] Creating session... userID=\(authManager.userID ?? "nil")")
             let backendToken = try await getBackendToken()
+            print("[SessionStore] Got backend token")
             let session = try await createSessionOnBackend(token: backendToken)
+            print("[SessionStore] Session created: \(session.id), code: \(session.joinCode)")
             self.session = session
+            self.isCreator = true
 
             try await connectToSession(sessionID: session.id, token: backendToken)
+            print("[SessionStore] Connected to session")
         } catch {
+            print("[SessionStore] ERROR: \(error)")
             self.error = .sessionCreationFailed(underlying: error)
         }
 
@@ -53,12 +61,35 @@ final class SessionStore {
             let backendToken = try await getBackendToken()
             let sessionInfo = try await joinSessionOnBackend(code: code, token: backendToken)
 
+            // Add the DJ and ourselves as members
+            var members: [Session.Member] = []
+
+            // Add the DJ/host (display name will be corrected by stateSync)
+            let djMember = Session.Member(
+                id: sessionInfo.djUserId,
+                displayName: sessionInfo.djDisplayName ?? sessionInfo.djUserId,
+                isConnected: true,
+                avatarColor: .cyan
+            )
+            members.append(djMember)
+
+            // Add ourselves if we're not the DJ
+            if let myID = authManager.userID, myID != sessionInfo.djUserId {
+                let me = Session.Member(
+                    id: myID,
+                    displayName: authManager.displayName ?? myID,
+                    isConnected: true,
+                    avatarColor: AvatarColor.allCases.filter { $0 != .cyan }.randomElement()!
+                )
+                members.append(me)
+            }
+
             self.session = Session(
                 id: sessionInfo.id,
                 joinCode: sessionInfo.joinCode,
-                creatorID: "",
+                creatorID: sessionInfo.djUserId,
                 djUserID: sessionInfo.djUserId,
-                members: [],
+                members: members,
                 queue: [],
                 currentTrack: nil,
                 isPlaying: false,
@@ -89,11 +120,43 @@ final class SessionStore {
     }
 
     func play(track: Track) async {
-        guard isDJ else { return }
+        print("[SessionStore] play() called — isDJ=\(isDJ), appRemoteConnected=\(authManager.isConnectedToSpotifyApp)")
+        // Skip DJ check for solo sessions with no members
+        let canPlay = isDJ || (session?.members.isEmpty == true)
+        guard canPlay else { return }
+
+        // Set currentTrack immediately so UI navigates to the player
+        session?.currentTrack = track
+        session?.isPlaying = true
+
+        // Ensure Spotify app is connected before playing
+        if !authManager.isConnectedToSpotifyApp {
+            print("[SessionStore] AppRemote not connected — waking Spotify app")
+            await ensureSpotifyConnected()
+            if !authManager.isConnectedToSpotifyApp {
+                print("[SessionStore] Still not connected after waiting")
+                self.error = .playbackFailed(underlying: NSError(domain: "PirateRadio", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not connect to Spotify app. Make sure Spotify is installed."]))
+                return
+            }
+        }
+
+        // Play through SyncEngine so all listeners get playback commands
         do {
             try await syncEngine?.djPlay(track: track)
+            print("[SessionStore] djPlay sent successfully via SyncEngine")
         } catch {
+            print("[SessionStore] djPlay error: \(error)")
             self.error = .playbackFailed(underlying: error)
+            session?.isPlaying = false
+        }
+    }
+
+    /// Wake Spotify app and wait for AppRemote connection.
+    private func ensureSpotifyConnected() async {
+        authManager.wakeSpotifyAndConnect()
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(500))
+            if authManager.isConnectedToSpotifyApp { break }
         }
     }
 
@@ -141,17 +204,88 @@ final class SessionStore {
         case .playbackStateChanged(let isPlaying, _):
             session?.isPlaying = isPlaying
         case .memberJoined(let userID, let name):
-            session?.members.append(Session.Member(id: userID, displayName: name, isConnected: true, avatarColor: AvatarColor.allCases.randomElement()!))
+            // Deduplicate: update existing member or append new one
+            if let idx = session?.members.firstIndex(where: { $0.id == userID }) {
+                if !name.isEmpty {
+                    session?.members[idx].displayName = name
+                }
+                session?.members[idx].isConnected = true
+            } else {
+                let color = AvatarColor.allCases.filter { c in
+                    session?.members.contains { $0.avatarColor == c } != true
+                }.randomElement() ?? .cyan
+                session?.members.append(Session.Member(
+                    id: userID, displayName: name.isEmpty ? userID : name,
+                    isConnected: true, avatarColor: color
+                ))
+            }
         case .memberLeft(let userID):
             session?.members.removeAll { $0.id == userID }
         case .queueUpdated:
             break // Queue updates handled separately
         case .trackChanged:
             break
+        case .stateSynced(let snapshot):
+            handleStateSync(snapshot)
+        }
+    }
+
+    private func handleStateSync(_ snapshot: SessionSnapshot) {
+        print("[SessionStore] Received stateSync: dj=\(snapshot.djUserID), members=\(snapshot.members.count), track=\(snapshot.trackID ?? "none")")
+
+        // Update DJ
+        session?.djUserID = snapshot.djUserID
+
+        // Replace member list with server-authoritative data (preserves avatar colors for known members)
+        if !snapshot.members.isEmpty {
+            var updatedMembers: [Session.Member] = []
+            let usedColors = Set(session?.members.map { $0.avatarColor } ?? [])
+            var availableColors = AvatarColor.allCases.filter { !usedColors.contains($0) }
+
+            for sm in snapshot.members {
+                if let existing = session?.members.first(where: { $0.id == sm.userId }) {
+                    // Keep existing member's avatar color, update display name
+                    var member = existing
+                    member.displayName = sm.displayName
+                    member.isConnected = true
+                    updatedMembers.append(member)
+                } else {
+                    let color = availableColors.isEmpty ? AvatarColor.allCases.randomElement()! : availableColors.removeFirst()
+                    updatedMembers.append(Session.Member(
+                        id: sm.userId, displayName: sm.displayName,
+                        isConnected: true, avatarColor: color
+                    ))
+                }
+            }
+            session?.members = updatedMembers
+        }
+
+        // Update playback state
+        session?.isPlaying = snapshot.playbackRate > 0
+        session?.epoch = snapshot.epoch
+
+        // Update current track from snapshot if available
+        if let track = snapshot.currentTrack {
+            session?.currentTrack = track
+        }
+
+        // If music is playing and we're a listener, ensure Spotify is ready
+        if snapshot.playbackRate > 0 && snapshot.trackID != nil && !isDJ {
+            if !authManager.isConnectedToSpotifyApp {
+                print("[SessionStore] stateSync shows active playback — waking Spotify for listener")
+                Task { await ensureSpotifyConnected() }
+            }
         }
     }
 
     private func getBackendToken() async throws -> String {
+        // Profile may still be loading on fresh launch — wait briefly for userID
+        if authManager.userID == nil {
+            for _ in 0..<10 {
+                try await Task.sleep(for: .milliseconds(300))
+                if authManager.userID != nil { break }
+            }
+        }
         guard let userID = authManager.userID else {
             throw PirateRadioError.notAuthenticated
         }
@@ -174,15 +308,30 @@ final class SessionStore {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, httpResponse) = try await URLSession.shared.data(for: request)
+        if let httpStatus = (httpResponse as? HTTPURLResponse)?.statusCode, httpStatus >= 400 {
+            let body = String(data: data, encoding: .utf8) ?? "unknown"
+            print("[SessionStore] Backend error \(httpStatus): \(body)")
+            throw PirateRadioError.sessionCreationFailed(
+                underlying: NSError(domain: "Backend", code: httpStatus, userInfo: [NSLocalizedDescriptionKey: body])
+            )
+        }
         let response = try JSONDecoder().decode(CreateSessionResponse.self, from: data)
+
+        // Add the creator as the first member
+        let djMember = Session.Member(
+            id: response.djUserId,
+            displayName: authManager.displayName ?? response.djUserId,
+            isConnected: true,
+            avatarColor: .cyan
+        )
 
         return Session(
             id: response.id,
             joinCode: response.joinCode,
             creatorID: response.creatorId,
             djUserID: response.djUserId,
-            members: [],
+            members: [djMember],
             queue: [],
             currentTrack: nil,
             isPlaying: false,
@@ -320,5 +469,6 @@ private struct JoinSessionResponse: Codable {
     let id: String
     let joinCode: String
     let djUserId: String
+    let djDisplayName: String?
     let memberCount: Int
 }

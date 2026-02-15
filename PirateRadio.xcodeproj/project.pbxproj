@@ -34,6 +34,7 @@
 		8EE5D3B86E80783256EABC05 /* MockTimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39327321C704C4463A676297 /* MockTimerManager.swift */; };
 		95E251D4BF3808924614D9D8 /* FrequencyDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23040DFEF11900C2500B646D /* FrequencyDial.swift */; };
 		9773CCB1A608195927C200A6 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E03792B7C201F38351FE541 /* MockData.swift */; };
+		984FB2FAD9A80976D31A30F0 /* ServerMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 453E51C40B34CC4649FCD917 /* ServerMessage.swift */; };
 		9FC7243462ED1F5990FB958E /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98ECD25694E483F36914616 /* OnboardingView.swift */; };
 		A319CAEB80C6DAD005E19208 /* GloveButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */; };
 		A89C4FA5BAF357BF0445FD01 /* SyncCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D358A247C684183CB4B21 /* SyncCommand.swift */; };
@@ -89,6 +90,7 @@
 		39327321C704C4463A676297 /* MockTimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTimerManager.swift; sourceTree = "<group>"; };
 		3E03792B7C201F38351FE541 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		408B663AD10B9AE7F3377AFC /* PirateRadio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PirateRadio.entitlements; sourceTree = "<group>"; };
+		453E51C40B34CC4649FCD917 /* ServerMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessage.swift; sourceTree = "<group>"; };
 		4FD24E4C942637EC14BE6E13 /* MemberProfileCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberProfileCard.swift; sourceTree = "<group>"; };
 		50858029E4349C69A37E144C /* ConnectionStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusBadge.swift; sourceTree = "<group>"; };
 		5D6BA525897044C3AF5A8EB7 /* DJModePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJModePicker.swift; sourceTree = "<group>"; };
@@ -243,6 +245,7 @@
 			isa = PBXGroup;
 			children = (
 				05CB5E28D91B0B29D64C3110 /* KronosClock.swift */,
+				453E51C40B34CC4649FCD917 /* ServerMessage.swift */,
 				CD50FCDBA03338A646FBA8D7 /* WebSocketTransport.swift */,
 			);
 			path = Networking;
@@ -526,6 +529,7 @@
 				EBDEB57FD74A698E940ECD1E /* PirateTheme.swift in Sources */,
 				5B116B429BAA1B88A4DD1B09 /* QueueView.swift in Sources */,
 				3017E628F6D9A5281095ADBC /* RequestsView.swift in Sources */,
+				984FB2FAD9A80976D31A30F0 /* ServerMessage.swift in Sources */,
 				548613E89C576931E5791F2A /* Session.swift in Sources */,
 				DD43C9013B4D08E85474446D /* SessionLobbyView.swift in Sources */,
 				FB5940930C687FC0BDAC32C9 /* SessionRecapView.swift in Sources */,

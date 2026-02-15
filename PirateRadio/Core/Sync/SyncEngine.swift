@@ -49,6 +49,7 @@ actor SyncEngine {
         case memberLeft(UserID)
         case connectionStateChanged(ConnectionState)
         case syncStatus(SyncStatus)
+        case stateSynced(SessionSnapshot)
     }
 
     enum SyncStatus: Sendable {
@@ -232,12 +233,13 @@ actor SyncEngine {
 
         case .stateSync(let snapshot):
             await handleStateSync(snapshot)
+            onSessionUpdate?(.stateSynced(snapshot))
 
         case .queueUpdate(let trackIDs):
             onSessionUpdate?(.queueUpdated(trackIDs))
 
-        case .memberJoined(let userID):
-            onSessionUpdate?(.memberJoined(userID, ""))
+        case .memberJoined(let userID, let displayName):
+            onSessionUpdate?(.memberJoined(userID, displayName))
 
         case .memberLeft(let userID):
             onSessionUpdate?(.memberLeft(userID))

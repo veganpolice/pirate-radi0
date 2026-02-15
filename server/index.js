@@ -138,10 +138,12 @@ app.post("/sessions/join", authenticateHTTP, (req, res) => {
     return res.status(409).json({ error: "Session is full" });
   }
 
+  const djMember = session.members.get(session.djUserId);
   res.json({
     id: session.id,
     joinCode: session.joinCode,
     djUserId: session.djUserId,
+    djDisplayName: djMember?.displayName || session.djUserId,
     memberCount: session.members.size,
   });
 });

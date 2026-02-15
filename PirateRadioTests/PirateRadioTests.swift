@@ -486,10 +486,11 @@ struct SyncMessageCodableTests {
 
     @Test("memberJoined round-trips through JSON")
     func memberJoinedRoundTrip() throws {
-        let original = makeMessage(type: .memberJoined("new-user"))
+        let original = makeMessage(type: .memberJoined(userID: "new-user", displayName: "New User"))
         let decoded = try roundTrip(original)
-        if case .memberJoined(let userID) = decoded.type {
+        if case .memberJoined(let userID, let displayName) = decoded.type {
             #expect(userID == "new-user")
+            #expect(displayName == "New User")
         } else {
             Issue.record("Expected .memberJoined, got \(decoded.type)")
         }

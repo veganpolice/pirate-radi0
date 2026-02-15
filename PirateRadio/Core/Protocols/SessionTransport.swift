@@ -29,7 +29,7 @@ struct SyncMessage: Codable, Sendable {
         case driftReport(trackID: String, positionMs: Int, ntpTimestamp: UInt64)
         case stateSync(SessionSnapshot)
         case queueUpdate([String]) // Track IDs
-        case memberJoined(UserID)
+        case memberJoined(userID: UserID, displayName: String)
         case memberLeft(UserID)
     }
 }
@@ -37,13 +37,36 @@ struct SyncMessage: Codable, Sendable {
 /// Snapshot of the full session state, used for reconnection and join-mid-song.
 struct SessionSnapshot: Codable, Sendable {
     let trackID: String?
-    let positionAtAnchor: Double
+    let positionAtAnchor: Double // seconds
     let ntpAnchor: UInt64
-    let playbackRate: Double
+    let playbackRate: Double // 1.0 = playing, 0.0 = paused
     let queue: [String]
     let djUserID: UserID
     let epoch: UInt64
     let sequenceNumber: UInt64
+    let members: [SnapshotMember]
+    let currentTrack: Track? // Full track object for UI display
+
+    struct SnapshotMember: Codable, Sendable {
+        let userId: String
+        let displayName: String
+    }
+
+    init(trackID: String?, positionAtAnchor: Double, ntpAnchor: UInt64,
+         playbackRate: Double, queue: [String], djUserID: UserID,
+         epoch: UInt64, sequenceNumber: UInt64,
+         members: [SnapshotMember] = [], currentTrack: Track? = nil) {
+        self.trackID = trackID
+        self.positionAtAnchor = positionAtAnchor
+        self.ntpAnchor = ntpAnchor
+        self.playbackRate = playbackRate
+        self.queue = queue
+        self.djUserID = djUserID
+        self.epoch = epoch
+        self.sequenceNumber = sequenceNumber
+        self.members = members
+        self.currentTrack = currentTrack
+    }
 }
 
 typealias UserID = String
