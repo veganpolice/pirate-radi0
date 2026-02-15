@@ -231,7 +231,13 @@ wss.on("connection", (ws) => {
   session.lastActivity = Date.now();
 
   // Send session snapshot to joiner
-  ws.send(JSON.stringify({ type: "stateSync", data: sessionSnapshot(session) }));
+  ws.send(JSON.stringify({
+    type: "stateSync",
+    data: sessionSnapshot(session),
+    epoch: session.epoch,
+    seq: session.sequence,
+    timestamp: Date.now(),
+  }));
 
   // Notify others
   broadcastToSession(session, {

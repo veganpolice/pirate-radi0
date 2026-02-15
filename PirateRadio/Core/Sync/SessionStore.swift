@@ -279,11 +279,11 @@ final class SessionStore {
     }
 
     private func getBackendToken() async throws -> String {
-        // Profile may still be loading on fresh launch — wait briefly for userID
-        if authManager.userID == nil {
+        // Profile may still be loading on fresh launch — wait briefly for userID and displayName
+        if authManager.userID == nil || authManager.displayName == nil {
             for _ in 0..<10 {
                 try await Task.sleep(for: .milliseconds(300))
-                if authManager.userID != nil { break }
+                if authManager.userID != nil && authManager.displayName != nil { break }
             }
         }
         guard let userID = authManager.userID else {

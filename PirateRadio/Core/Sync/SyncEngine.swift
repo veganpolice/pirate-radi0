@@ -188,6 +188,13 @@ actor SyncEngine {
     }
 
     private func processMessage(_ message: SyncMessage) async {
+        // stateSync is a full snapshot — always process regardless of sequence/epoch
+        if case .stateSync(let snapshot) = message.type {
+            await handleStateSync(snapshot)
+            onSessionUpdate?(.stateSynced(snapshot))
+            return
+        }
+
         // Epoch validation: ignore messages from old epochs
         if message.epoch < currentEpoch {
             return
@@ -231,9 +238,8 @@ actor SyncEngine {
             // DJ receives drift reports from listeners — monitoring only
             break
 
-        case .stateSync(let snapshot):
-            await handleStateSync(snapshot)
-            onSessionUpdate?(.stateSynced(snapshot))
+        case .stateSync:
+            break // handled above
 
         case .queueUpdate(let trackIDs):
             onSessionUpdate?(.queueUpdated(trackIDs))
