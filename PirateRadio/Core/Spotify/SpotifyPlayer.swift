@@ -34,6 +34,13 @@ actor SpotifyPlayer: MusicSource {
     /// but not marked Sendable (Obj-C class).
     nonisolated(unsafe) private let appRemote: SPTAppRemote
 
+    /// Called when a track reaches its end (paused near duration).
+    private var onTrackEnded: (() -> Void)?
+
+    func setOnTrackEnded(_ handler: @escaping () -> Void) {
+        onTrackEnded = handler
+    }
+
     /// Average measured latency from play() call to actual playback start.
     /// Used by the sync engine to calibrate coordinated playback timing.
     var averagePlayLatency: TimeInterval {
@@ -154,6 +161,12 @@ actor SpotifyPlayer: MusicSource {
             positionSeconds: Double(playerState.playbackPosition) / 1000.0,
             timestamp: UInt64(Date.now.timeIntervalSince1970 * 1000)
         ))
+
+        // Detect track end: paused and near the end of the track
+        if playerState.isPaused,
+           playerState.playbackPosition >= Int(playerState.track.duration) - 1000 {
+            onTrackEnded?()
+        }
     }
 
     // MARK: - Private

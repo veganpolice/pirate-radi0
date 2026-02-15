@@ -71,6 +71,7 @@ app.get("/health", (_req, res) => {
 // Authenticate: client sends Spotify user info, gets a JWT
 app.post("/auth", (req, res) => {
   const { spotifyUserId, displayName } = req.body;
+  console.log(`[auth] ${displayName || spotifyUserId}`);
   if (!spotifyUserId || typeof spotifyUserId !== "string") {
     return res.status(400).json({ error: "spotifyUserId required" });
   }
@@ -94,6 +95,7 @@ app.post("/sessions", authenticateHTTP, (req, res) => {
 
   const session = createSession(userId);
   recordRateLimit(sessionCreationLog, userId);
+  console.log(`[session:create] id=${session.id} code=${session.joinCode} dj=${userId}`);
 
   res.status(201).json({
     id: session.id,
@@ -139,6 +141,7 @@ app.post("/sessions/join", authenticateHTTP, (req, res) => {
   }
 
   const djMember = session.members.get(session.djUserId);
+  console.log(`[session:join] code=${code} session=${session.id} dj=${djMember?.displayName || session.djUserId} members=${session.members.size}`);
   res.json({
     id: session.id,
     joinCode: session.joinCode,
@@ -205,6 +208,7 @@ wss.on("connection", (ws) => {
   const session = sessions.get(sessionId);
 
   if (!session) {
+    console.log(`[ws] session not found: ${sessionId} (active sessions: ${sessions.size})`);
     ws.close(4004, "Session not found");
     return;
   }
@@ -229,6 +233,7 @@ wss.on("connection", (ws) => {
     joinedAt: Date.now(),
   });
   session.lastActivity = Date.now();
+  console.log(`[ws] connected: ${displayName} (${userId}) to session ${sessionId}, members=${session.members.size}`);
 
   // Send session snapshot to joiner
   ws.send(JSON.stringify({
@@ -257,6 +262,7 @@ wss.on("connection", (ws) => {
       return; // ignore malformed
     }
 
+    console.log(`[ws:msg] ${displayName}: ${msg.type}`, msg.data ? JSON.stringify(msg.data).slice(0, 120) : "");
     handleMessage(session, userId, msg);
   });
 
@@ -409,11 +415,12 @@ function handleMessage(session, senderId, msg) {
         session.positionTimestamp = Date.now();
         session.isPlaying = true;
         session.epoch++;
-        session.sequence++;
+        session.sequence = 0;
 
+        // Broadcast full state — DJ client will initiate playback
         broadcastToSession(session, {
-          type: "playPrepare",
-          data: { trackId: nextTrack.id, track: nextTrack },
+          type: "stateSync",
+          data: sessionSnapshot(session),
           epoch: session.epoch,
           seq: session.sequence,
           timestamp: Date.now(),

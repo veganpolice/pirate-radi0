@@ -102,7 +102,9 @@ actor WebSocketTransport: SessionTransport {
                     let message = try await task.receive()
                     await self?.handleReceivedMessage(message)
                 } catch {
-                    await self?.handleDisconnection(error: error)
+                    // Capture close code before the task reference is lost
+                    let closeCode = task.closeCode.rawValue
+                    await self?.handleDisconnection(error: error, closeCode: Int(closeCode))
                     break
                 }
             }
@@ -196,17 +198,8 @@ actor WebSocketTransport: SessionTransport {
             type = .seek(positionMs: posMs, atNtp: atNtp)
 
         case "queueUpdate":
-            var trackIDs: [String] = []
-            if let queueArray = d?["queue"]?.arrayValue {
-                for item in queueArray {
-                    if let id = item["id"]?.stringValue {
-                        trackIDs.append(id)
-                    } else if let id = item.stringValue {
-                        trackIDs.append(id)
-                    }
-                }
-            }
-            type = .queueUpdate(trackIDs)
+            let tracks = decodeTrackArray(d?["queue"])
+            type = .queueUpdate(tracks)
 
         case "driftReport":
             let trackID = d?["trackId"]?.stringValue ?? ""
@@ -245,17 +238,8 @@ actor WebSocketTransport: SessionTransport {
         let epoch = UInt64(d["epoch"]?.doubleValue ?? 0)
         let sequence = UInt64(d["sequence"]?.doubleValue ?? 0)
 
-        // Parse queue — array of track objects with id field
-        var queue: [String] = []
-        if let queueArray = d["queue"]?.arrayValue {
-            for item in queueArray {
-                if let id = item["id"]?.stringValue {
-                    queue.append(id)
-                } else if let id = item.stringValue {
-                    queue.append(id)
-                }
-            }
-        }
+        // Parse queue — array of full track objects
+        let queue = decodeTrackArray(d["queue"])
 
         // Parse members
         var members: [SessionSnapshot.SnapshotMember] = []
@@ -310,6 +294,16 @@ actor WebSocketTransport: SessionTransport {
         }
     }
 
+    /// Decode an array of Track objects from a JSONValue array.
+    private static func decodeTrackArray(_ value: JSONValue?) -> [Track] {
+        guard let arr = value?.arrayValue else { return [] }
+        return arr.compactMap { item -> Track? in
+            guard let dict = jsonValueToAny(item) else { return nil }
+            guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+            return try? JSONDecoder().decode(Track.self, from: data)
+        }
+    }
+
     // MARK: - Client → Server Encoding
 
     static func encodeForServer(_ message: SyncMessage) -> [String: Any] {
@@ -344,6 +338,18 @@ actor WebSocketTransport: SessionTransport {
             result["type"] = "skip"
             result["data"] = [String: Any]()
 
+        case .addToQueue(let track, let nonce):
+            result["type"] = "addToQueue"
+            result["data"] = [
+                "track": [
+                    "id": track.id, "name": track.name, "artist": track.artist,
+                    "albumName": track.albumName,
+                    "albumArtURL": track.albumArtURL?.absoluteString ?? "",
+                    "durationMs": track.durationMs,
+                ] as [String: Any],
+                "nonce": nonce,
+            ] as [String: Any]
+
         case .driftReport(let trackID, let positionMs, let ntpTimestamp):
             result["type"] = "driftReport"
             result["data"] = ["trackId": trackID, "positionMs": positionMs, "ntpTimestamp": ntpTimestamp]
@@ -359,8 +365,19 @@ actor WebSocketTransport: SessionTransport {
 
     // MARK: - Reconnection
 
-    private func handleDisconnection(error: Error) {
+    private func handleDisconnection(error: Error, closeCode: Int = 0) {
         guard shouldStayConnected, !isReconnecting else { return }
+
+        // Check for permanent close codes that shouldn't trigger reconnection
+        // 4004 = session not found, 4009 = session full
+        if closeCode == 4004 || closeCode == 4009 {
+            let reason = closeCode == 4004 ? "Session no longer exists" : "Session is full"
+            print("[WebSocket] Permanent close code \(closeCode): \(reason)")
+            webSocketTask = nil
+            shouldStayConnected = false
+            stateContinuation.yield(.failed(reason))
+            return
+        }
 
         webSocketTask = nil
         isReconnecting = true
@@ -392,4 +409,5 @@ actor WebSocketTransport: SessionTransport {
             }
         }
     }
+
 }

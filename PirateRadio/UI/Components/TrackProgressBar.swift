@@ -3,6 +3,7 @@ import SwiftUI
 /// Animated track progress bar with elapsed/remaining time labels and DJ scrubbing.
 struct TrackProgressBar: View {
     let durationMs: Int
+    let initialPositionMs: Double
     let isPlaying: Bool
     let isDJ: Bool
 
@@ -70,8 +71,7 @@ struct TrackProgressBar: View {
             if !playing { /* pause: freeze current time */ }
         }
         .onAppear {
-            // Start with a random position for demo effect
-            elapsedMs = Double.random(in: 30_000...90_000)
+            elapsedMs = initialPositionMs
         }
         .task {
             // Animate progress using a timer
@@ -81,10 +81,6 @@ struct TrackProgressBar: View {
                 if isPlaying && !isDragging {
                     withAnimation(.linear(duration: 0.5)) {
                         elapsedMs = min(elapsedMs + 500, Double(durationMs))
-                    }
-                    // Loop for demo
-                    if elapsedMs >= Double(durationMs) {
-                        elapsedMs = 0
                     }
                 }
             }

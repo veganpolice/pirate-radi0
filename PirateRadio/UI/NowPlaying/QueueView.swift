@@ -170,6 +170,11 @@ struct QueueView: View {
                         t.requestedBy = "You"
                         sessionStore.acceptRequest(t)
                         withAnimation { searchResults.removeAll { $0.id == track.id } }
+                    } else {
+                        Task {
+                            await sessionStore.addToQueue(track: track)
+                        }
+                        withAnimation { searchResults.removeAll { $0.id == track.id } }
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")

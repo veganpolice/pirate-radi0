@@ -65,16 +65,31 @@ struct NowPlayingView: View {
             // Hot-seat banner
             HotSeatBanner()
 
-            // Album art + track info
+            // Album art + track info, or waiting state
             if showArt {
-                trackHeader
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                if sessionStore.session?.currentTrack != nil {
+                    trackHeader
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .font(.system(size: 40))
+                            .foregroundStyle(PirateTheme.signal.opacity(0.3))
+                        Text("Waiting for DJ to play...")
+                            .font(PirateTheme.body(16))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .transition(.opacity)
+                }
             }
 
             // Progress bar
             if showProgress, let track = sessionStore.session?.currentTrack {
                 TrackProgressBar(
                     durationMs: track.durationMs,
+                    initialPositionMs: 0,
                     isPlaying: sessionStore.session?.isPlaying ?? false,
                     isDJ: sessionStore.isDJ
                 ) { seekPos in
@@ -301,7 +316,7 @@ struct NowPlayingView: View {
             .buttonStyle(GloveButtonStyle(color: isMuted ? PirateTheme.flare : PirateTheme.broadcast))
             .sensoryFeedback(.impact(weight: .medium), trigger: isMuted)
 
-            // Pause-for-all (smaller, exclamation mark)
+            // Pause/Play for all
             Button {
                 Task {
                     if sessionStore.session?.isPlaying == true {
@@ -311,20 +326,36 @@ struct NowPlayingView: View {
                     }
                 }
             } label: {
-                Image(systemName: sessionStore.session?.isPlaying == true
-                      ? "exclamationmark.circle.fill" : "play.circle.fill")
-                    .font(.title2)
+                ZStack {
+                    Image(systemName: sessionStore.session?.isPlaying == true
+                          ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.red)
+
+                    // Small exclamation badge
+                    if sessionStore.session?.isPlaying == true {
+                        Image(systemName: "exclamationmark")
+                            .font(.system(size: 8, weight: .black))
+                            .foregroundStyle(.red)
+                            .offset(x: 14, y: -10)
+                    }
+                }
             }
             .frame(minWidth: 44, minHeight: 44)
-            .sensoryFeedback(.impact(weight: .light), trigger: UUID())
+            .sensoryFeedback(.impact(weight: .light), trigger: sessionStore.session?.isPlaying)
 
             // Skip
             Button {
-                sessionStore.skipToNext()
+                if PirateRadioApp.demoMode {
+                    sessionStore.demoSkipToNext()
+                } else {
+                    Task { await sessionStore.skipToNext() }
+                }
             } label: {
                 Image(systemName: "forward.fill")
                     .font(.title2)
             }
+            .disabled(sessionStore.session?.queue.isEmpty != false)
             .frame(minWidth: 52, minHeight: 52)
             .sensoryFeedback(.impact(weight: .light), trigger: UUID())
         }

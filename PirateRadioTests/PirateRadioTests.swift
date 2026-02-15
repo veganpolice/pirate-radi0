@@ -447,12 +447,16 @@ struct SyncMessageCodableTests {
 
     @Test("stateSync round-trips through JSON")
     func stateSyncRoundTrip() throws {
+        let queueTracks = [
+            Track(id: "q1", name: "Track 1", artist: "Artist 1", albumName: "Album 1", albumArtURL: nil, durationMs: 180000),
+            Track(id: "q2", name: "Track 2", artist: "Artist 2", albumName: "Album 2", albumArtURL: nil, durationMs: 200000),
+        ]
         let snapshot = SessionSnapshot(
             trackID: "snap-track",
             positionAtAnchor: 22.5,
             ntpAnchor: 4_000_000,
             playbackRate: 1.0,
-            queue: ["q1", "q2"],
+            queue: queueTracks,
             djUserID: "dj-user",
             epoch: 5,
             sequenceNumber: 100
@@ -464,7 +468,9 @@ struct SyncMessageCodableTests {
             #expect(decodedSnapshot.positionAtAnchor == 22.5)
             #expect(decodedSnapshot.ntpAnchor == 4_000_000)
             #expect(decodedSnapshot.playbackRate == 1.0)
-            #expect(decodedSnapshot.queue == ["q1", "q2"])
+            #expect(decodedSnapshot.queue.count == 2)
+            #expect(decodedSnapshot.queue[0].id == "q1")
+            #expect(decodedSnapshot.queue[1].id == "q2")
             #expect(decodedSnapshot.djUserID == "dj-user")
             #expect(decodedSnapshot.epoch == 5)
             #expect(decodedSnapshot.sequenceNumber == 100)
@@ -475,10 +481,18 @@ struct SyncMessageCodableTests {
 
     @Test("queueUpdate round-trips through JSON")
     func queueUpdateRoundTrip() throws {
-        let original = makeMessage(type: .queueUpdate(["a", "b", "c"]))
+        let tracks = [
+            Track(id: "a", name: "Track A", artist: "Artist A", albumName: "Album A", albumArtURL: nil, durationMs: 180000),
+            Track(id: "b", name: "Track B", artist: "Artist B", albumName: "Album B", albumArtURL: nil, durationMs: 200000),
+            Track(id: "c", name: "Track C", artist: "Artist C", albumName: "Album C", albumArtURL: nil, durationMs: 220000),
+        ]
+        let original = makeMessage(type: .queueUpdate(tracks))
         let decoded = try roundTrip(original)
-        if case .queueUpdate(let trackIDs) = decoded.type {
-            #expect(trackIDs == ["a", "b", "c"])
+        if case .queueUpdate(let decodedTracks) = decoded.type {
+            #expect(decodedTracks.count == 3)
+            #expect(decodedTracks[0].id == "a")
+            #expect(decodedTracks[1].id == "b")
+            #expect(decodedTracks[2].id == "c")
         } else {
             Issue.record("Expected .queueUpdate, got \(decoded.type)")
         }

@@ -175,12 +175,32 @@ final class SessionStore {
         try? await syncEngine?.djSeek(to: positionMs)
     }
 
+    func addToQueue(track: Track) async {
+        if session?.currentTrack == nil {
+            await play(track: track)
+            return
+        }
+        await syncEngine?.sendAddToQueue(track: track)
+    }
+
+    func skipToNext() async {
+        guard isDJ else { return }
+        guard session?.queue.isEmpty == false else { return }
+        await syncEngine?.sendSkip()
+    }
+
     // MARK: - Private
 
     private func connectToSession(sessionID: String, token: String) async throws {
         let transport = WebSocketTransport(baseURL: baseURL)
         let clock = KronosClock()
         let player = SpotifyPlayer(appRemote: authManager.appRemote)
+
+        await player.setOnTrackEnded { [weak self] in
+            Task { @MainActor in
+                await self?.skipToNext()
+            }
+        }
 
         let engine = SyncEngine(musicSource: player, transport: transport, clock: clock)
 
@@ -199,6 +219,13 @@ final class SessionStore {
         switch update {
         case .connectionStateChanged(let state):
             connectionState = state
+            if case .failed(let reason) = state {
+                print("[SessionStore] Connection failed: \(reason)")
+                // Clear stale session so UI can return to the join/create screen
+                syncEngine = nil
+                session = nil
+                error = .sessionNotFound
+            }
         case .syncStatus(let status):
             syncStatus = status
         case .playbackStateChanged(let isPlaying, _):
@@ -221,8 +248,8 @@ final class SessionStore {
             }
         case .memberLeft(let userID):
             session?.members.removeAll { $0.id == userID }
-        case .queueUpdated:
-            break // Queue updates handled separately
+        case .queueUpdated(let tracks):
+            session?.queue = tracks
         case .trackChanged:
             break
         case .stateSynced(let snapshot):
@@ -232,6 +259,8 @@ final class SessionStore {
 
     private func handleStateSync(_ snapshot: SessionSnapshot) {
         print("[SessionStore] Received stateSync: dj=\(snapshot.djUserID), members=\(snapshot.members.count), track=\(snapshot.trackID ?? "none")")
+
+        let previousTrackID = session?.currentTrack?.id
 
         // Update DJ
         session?.djUserID = snapshot.djUserID
@@ -269,11 +298,27 @@ final class SessionStore {
             session?.currentTrack = track
         }
 
-        // If music is playing and we're a listener, ensure Spotify is ready
+        // Update queue from snapshot
+        session?.queue = snapshot.queue
+
+        // If DJ and the track changed, start playback of the new track
+        if isDJ, snapshot.playbackRate > 0,
+           let track = snapshot.currentTrack,
+           track.id != previousTrackID {
+            Task { await play(track: track) }
+        }
+
+        // If music is playing and we're a listener, ensure Spotify is ready and retry playback
         if snapshot.playbackRate > 0 && snapshot.trackID != nil && !isDJ {
             if !authManager.isConnectedToSpotifyApp {
                 print("[SessionStore] stateSync shows active playback — waking Spotify for listener")
-                Task { await ensureSpotifyConnected() }
+                Task {
+                    await ensureSpotifyConnected()
+                    if authManager.isConnectedToSpotifyApp {
+                        print("[SessionStore] Spotify connected — retrying catch-up playback")
+                        await syncEngine?.retryCatchUpPlayback()
+                    }
+                }
             }
         }
     }
@@ -408,7 +453,7 @@ extension SessionStore {
         session?.queue.append(track)
     }
 
-    func skipToNext() {
+    func demoSkipToNext() {
         guard let queue = session?.queue, !queue.isEmpty else { return }
         session?.currentTrack = queue.first
         session?.queue = Array(queue.dropFirst())

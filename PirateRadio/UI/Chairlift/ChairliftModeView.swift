@@ -76,7 +76,11 @@ struct ChairliftModeView: View {
 
                     // Skip
                     Button {
-                        sessionStore.skipToNext()
+                        if PirateRadioApp.demoMode {
+                            sessionStore.demoSkipToNext()
+                        } else {
+                            Task { await sessionStore.skipToNext() }
+                        }
                     } label: {
                         Image(systemName: "forward.fill")
                             .font(.system(size: 28))

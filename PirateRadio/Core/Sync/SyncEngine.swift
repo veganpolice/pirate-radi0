@@ -44,7 +44,7 @@ actor SyncEngine {
     enum SessionUpdate {
         case trackChanged(Track?)
         case playbackStateChanged(isPlaying: Bool, positionMs: Int)
-        case queueUpdated([String])
+        case queueUpdated([Track])
         case memberJoined(UserID, String)
         case memberLeft(UserID)
         case connectionStateChanged(ConnectionState)
@@ -177,6 +177,31 @@ actor SyncEngine {
         try await musicSource.seek(to: .milliseconds(positionMs))
     }
 
+    // MARK: - Queue Actions
+
+    func sendAddToQueue(track: Track) async {
+        let nonce = UUID().uuidString
+        let msg = SyncMessage(
+            id: UUID(),
+            type: .addToQueue(track: track, nonce: nonce),
+            sequenceNumber: 0,
+            epoch: currentEpoch,
+            timestamp: clock.now()
+        )
+        try? await transport.send(msg)
+    }
+
+    func sendSkip() async {
+        let msg = SyncMessage(
+            id: UUID(),
+            type: .skip,
+            sequenceNumber: 0,
+            epoch: currentEpoch,
+            timestamp: clock.now()
+        )
+        try? await transport.send(msg)
+    }
+
     // MARK: - Message Processing
 
     private func startListening() {
@@ -234,6 +259,10 @@ actor SyncEngine {
             // Handled by the queue system
             break
 
+        case .addToQueue:
+            // Client-originated; server handles and broadcasts queueUpdate
+            break
+
         case .driftReport:
             // DJ receives drift reports from listeners — monitoring only
             break
@@ -241,8 +270,8 @@ actor SyncEngine {
         case .stateSync:
             break // handled above
 
-        case .queueUpdate(let trackIDs):
-            onSessionUpdate?(.queueUpdated(trackIDs))
+        case .queueUpdate(let tracks):
+            onSessionUpdate?(.queueUpdated(tracks))
 
         case .memberJoined(let userID, let displayName):
             onSessionUpdate?(.memberJoined(userID, displayName))
@@ -365,6 +394,18 @@ actor SyncEngine {
             timestamp: now
         )
         try? await transport.send(driftReport)
+    }
+
+    // MARK: - Catch-Up Playback
+
+    /// Retries playback from the current anchor after Spotify becomes available.
+    /// Called by SessionStore once AppRemote connects for a crew member joining mid-song.
+    func retryCatchUpPlayback() async {
+        guard let anchor = currentAnchor, anchor.playbackRate > 0 else { return }
+        let now = clock.now()
+        let currentPositionSec = anchor.positionAt(ntpTime: now)
+        try? await musicSource.play(trackID: anchor.trackID, at: .seconds(currentPositionSec))
+        startDriftChecking()
     }
 
     // MARK: - State Sync (reconnection / join-mid-song)
