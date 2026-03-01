@@ -21,6 +21,7 @@ final class SpotifyAuthManager: NSObject {
         "user-modify-playback-state",
         "user-read-currently-playing",
         "user-read-private",
+        "user-top-read",
         "streaming",
         "app-remote-control",
     ].joined(separator: " ")
@@ -109,7 +110,7 @@ final class SpotifyAuthManager: NSObject {
                     }
                 }
                 session.presentationContextProvider = webAuthContextProvider
-                session.prefersEphemeralWebBrowserSession = false
+                session.prefersEphemeralWebBrowserSession = true
                 session.start()
             }
             try await handleAuthCallback(callbackURL)
@@ -222,21 +223,32 @@ final class SpotifyAuthManager: NSObject {
     // MARK: - User Profile
 
     private func refreshUserProfile() async {
-        guard let token = accessToken else { return }
-        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me")!)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        do {
+            let token = try await getAccessToken()
+            logger.notice("Profile fetch: got access token")
+            var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me")!)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
-        guard let (data, _) = try? await URLSession.shared.data(for: request),
-              let profile = try? JSONDecoder().decode(SpotifyProfile.self, from: data) else {
-            return
-        }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
+            logger.notice("Profile fetch: HTTP \(httpStatus)")
 
-        displayName = profile.displayName
-        userID = profile.id
-        isPremium = profile.product == "premium"
+            if httpStatus != 200 {
+                logger.error("Profile fetch failed: \(String(data: data, encoding: .utf8) ?? "no body")")
+                return
+            }
 
-        if !isPremium {
-            error = .spotifyNotPremium
+            let profile = try JSONDecoder().decode(SpotifyProfile.self, from: data)
+            displayName = profile.displayName
+            userID = profile.id
+            isPremium = profile.product == "premium"
+            logger.notice("Profile loaded: \(profile.displayName ?? "?"), userID=\(profile.id), premium=\(profile.product ?? "?")")
+
+            if !isPremium {
+                error = .spotifyNotPremium
+            }
+        } catch {
+            logger.error("Profile fetch error: \(error)")
         }
     }
 
@@ -260,6 +272,15 @@ final class SpotifyAuthManager: NSObject {
         }
         appRemote.connectionParameters.accessToken = token
         appRemote.connect()
+    }
+
+    /// Open the Spotify app to wake it up, then connect AppRemote.
+    /// Use this when AppRemote fails to connect (Spotify not running).
+    func wakeSpotifyAndConnect() {
+        guard let token = accessToken else { return }
+        appRemote.connectionParameters.accessToken = token
+        // authorizeAndPlayURI opens Spotify app; empty string = don't auto-play
+        appRemote.authorizeAndPlayURI("")
     }
 
     /// Disconnect from the Spotify app (call when entering background).

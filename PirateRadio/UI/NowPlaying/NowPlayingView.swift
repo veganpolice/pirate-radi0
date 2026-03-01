@@ -23,8 +23,8 @@ struct NowPlayingView: View {
     @State private var showControls = false
     @State private var showCrew = false
 
-    // Request badge count
-    @State private var pendingRequestCount = 5
+    // Request badge count — derived from queue in real mode, demo uses static count
+    @State private var pendingRequestCount = PirateRadioApp.demoMode ? 5 : 0
 
     var body: some View {
         ZStack {
@@ -141,18 +141,6 @@ struct NowPlayingView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 0) {
-            // Hamburger menu
-            Button { showSettings = true } label: {
-                VStack(spacing: 3) {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 20, weight: .medium))
-                    Text("Menu")
-                        .font(PirateTheme.body(9))
-                }
-                .foregroundStyle(PirateTheme.signal.opacity(0.6))
-            }
-            .frame(maxWidth: .infinity, minHeight: 50)
-
             // Messages / Requests
             Button { showRequests = true } label: {
                 ZStack(alignment: .topTrailing) {
@@ -395,6 +383,7 @@ struct NowPlayingView: View {
     // MARK: - Debug Shake
 
     private func handleShake() {
+        guard PirateRadioApp.demoMode else { return }
         let actions: [() -> Void] = [
             { showSignalLost = true },
             {

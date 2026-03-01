@@ -39,6 +39,35 @@ actor SpotifyClient {
         }
     }
 
+    // MARK: - Top Tracks
+
+    func getTopTracks(limit: Int = 20) async throws -> [Track] {
+        let token = try await authManager.getAccessToken()
+        var components = URLComponents(string: "https://api.spotify.com/v1/me/top/tracks")!
+        components.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "time_range", value: "short_term"),
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+
+        let result = try JSONDecoder().decode(TopTracksResponse.self, from: data)
+        return result.items.map { item in
+            Track(
+                id: item.id,
+                name: item.name,
+                artist: item.artists.first?.name ?? "Unknown",
+                albumName: item.album.name,
+                albumArtURL: item.album.images.first.flatMap { URL(string: $0.url) },
+                durationMs: item.durationMs
+            )
+        }
+    }
+
     // MARK: - Track Metadata
 
     func getTrack(id: String) async throws -> Track {
@@ -83,6 +112,10 @@ private struct SearchResponse: Codable {
     struct TracksContainer: Codable {
         let items: [SpotifyTrack]
     }
+}
+
+private struct TopTracksResponse: Codable {
+    let items: [SpotifyTrack]
 }
 
 private struct SpotifyTrack: Codable {

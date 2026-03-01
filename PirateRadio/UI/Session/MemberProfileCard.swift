@@ -99,8 +99,12 @@ struct MemberProfileCard: View {
         .background(PirateTheme.void)
         .confirmationDialog("Pass DJ", isPresented: $showPassDJConfirm) {
             Button("Pass DJ") {
-                sessionStore.setDJ(member.id)
-                toastManager.show(.djChanged, message: "\(member.displayName) is now DJ")
+                if PirateRadioApp.demoMode {
+                    sessionStore.setDJ(member.id)
+                    toastManager.show(.djChanged, message: "\(member.displayName) is now DJ")
+                } else {
+                    toastManager.show(.comingSoon, message: "Pass DJ coming soon")
+                }
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}

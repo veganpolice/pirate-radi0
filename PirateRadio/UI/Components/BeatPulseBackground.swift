@@ -121,11 +121,11 @@ struct BeatPulseBackground: View {
                     withAnimation(.spring(duration: 0.3)) {
                         spawnedRings.append(ring)
                     }
-                    if spawnedRings.count > 10 {
-                        spawnedRings.removeFirst(spawnedRings.count - 10)
+                    if spawnedRings.count > 15 {
+                        spawnedRings.removeFirst(spawnedRings.count - 15)
                     }
                 }
-                try? await Task.sleep(for: .seconds(Double.random(in: 4...7)))
+                try? await Task.sleep(for: .seconds(Double.random(in: 2...3.5)))
             }
         }
     }
@@ -236,22 +236,23 @@ struct SpawnedRing: Identifiable {
 private struct SpawnedRingView: View {
     let ring: SpawnedRing
 
-    @State private var scale: CGFloat = 0.2
+    @State private var scale: CGFloat = 0.3
     @State private var opacity: Double = 0
 
     var body: some View {
         Ellipse()
-            .strokeBorder(ring.color, lineWidth: 1)
-            .frame(width: 250, height: 220)
+            .strokeBorder(ring.color, lineWidth: 0.8)
+            .frame(width: 200, height: 180)
             .scaleEffect(scale)
             .rotationEffect(.degrees(ring.rotation))
             .opacity(opacity)
             .position(ring.birthPosition)
+            .drawingGroup() // Rasterize for smoother GPU rendering
             .onAppear {
-                scale = 0.2
-                opacity = 0.35
-                withAnimation(.easeOut(duration: 10)) {
-                    scale = 7.0
+                scale = 0.3
+                opacity = 0.3
+                withAnimation(.easeOut(duration: 8)) {
+                    scale = 4.0
                     opacity = 0
                 }
             }

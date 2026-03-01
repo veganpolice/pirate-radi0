@@ -20,7 +20,7 @@ struct PirateRadioApp: App {
             _sessionStore = State(initialValue: SessionStore.demo())
         } else {
             _authManager = State(initialValue: auth)
-            _sessionStore = State(initialValue: nil)
+            _sessionStore = State(initialValue: auth.isAuthenticated ? SessionStore(authManager: auth) : nil)
         }
     }
 
@@ -34,9 +34,9 @@ struct PirateRadioApp: App {
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     guard !Self.demoMode else { return }
-                    if isAuth {
+                    if isAuth && sessionStore == nil {
                         sessionStore = SessionStore(authManager: authManager)
-                    } else {
+                    } else if !isAuth {
                         sessionStore = nil
                     }
                 }
@@ -130,7 +130,8 @@ struct SessionRootView: View {
         NavigationStack {
             Group {
                 if let session = sessionStore.session {
-                    if session.currentTrack != nil {
+                    if session.currentTrack != nil || !sessionStore.isCreator {
+                        // Show player if track is playing OR if we joined someone else's session
                         NowPlayingView()
                     } else {
                         CreateSessionView()

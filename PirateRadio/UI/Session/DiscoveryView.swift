@@ -3,6 +3,7 @@ import SwiftUI
 /// Mountain social / browse nearby crews with FM dial metaphor.
 struct DiscoveryView: View {
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(ToastManager.self) private var toastManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var dialValue: Double = 0.5
@@ -210,8 +211,8 @@ struct DiscoveryView: View {
 
                     // Tune In button
                     Button {
+                        toastManager.show(.comingSoon, message: "Tune In coming soon")
                         selectedSession = nil
-                        // In demo: would navigate to NowPlaying as eavesdrop listener
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "radio")

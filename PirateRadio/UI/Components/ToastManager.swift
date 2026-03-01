@@ -19,7 +19,7 @@ final class ToastManager {
     enum ToastType {
         case memberJoined, memberLeft, songRequest, djChanged
         case modeChanged, requestAccepted, requestDeclined
-        case voteCast, signalLost, reconnected, voiceClip
+        case voteCast, signalLost, reconnected, voiceClip, comingSoon
     }
 
     func show(_ type: ToastType, message: String) {
@@ -66,6 +66,7 @@ final class ToastManager {
         case .signalLost: "antenna.radiowaves.left.and.right.slash"
         case .reconnected: "antenna.radiowaves.left.and.right"
         case .voiceClip: "mic.fill"
+        case .comingSoon: "wrench.and.screwdriver"
         }
     }
 
@@ -75,6 +76,7 @@ final class ToastManager {
         case .djChanged, .modeChanged, .voteCast: PirateTheme.broadcast
         case .songRequest, .signalLost, .memberLeft, .requestDeclined: PirateTheme.flare
         case .voiceClip: PirateTheme.signal
+        case .comingSoon: PirateTheme.flare
         }
     }
 }

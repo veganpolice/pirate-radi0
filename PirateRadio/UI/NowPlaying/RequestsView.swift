@@ -9,7 +9,7 @@ struct RequestsView: View {
     @State private var requests: [Track]
 
     init() {
-        _requests = State(initialValue: MockData.pendingRequests)
+        _requests = State(initialValue: PirateRadioApp.demoMode ? MockData.pendingRequests : [])
     }
 
     var body: some View {

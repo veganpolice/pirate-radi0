@@ -57,8 +57,12 @@ struct SessionSettingsView: View {
             )) {
                 Button("Remove", role: .destructive) {
                     if let member = showKickConfirm {
-                        sessionStore.removeMember(member.id)
-                        toastManager.show(.memberLeft, message: "\(member.displayName) removed")
+                        if PirateRadioApp.demoMode {
+                            sessionStore.removeMember(member.id)
+                            toastManager.show(.memberLeft, message: "\(member.displayName) removed")
+                        } else {
+                            toastManager.show(.comingSoon, message: "Remove member coming soon")
+                        }
                     }
                 }
                 Button("Cancel", role: .cancel) {}
@@ -69,6 +73,7 @@ struct SessionSettingsView: View {
             }
             .confirmationDialog("End Session", isPresented: $showEndConfirm) {
                 Button("End Session", role: .destructive) {
+                    Task { await sessionStore.leaveSession() }
                     showRecap = true
                 }
                 Button("Cancel", role: .cancel) {}
@@ -241,8 +246,12 @@ struct SessionSettingsView: View {
                     DJModePicker(selectedMode: .init(
                         get: { sessionStore.session?.djMode ?? .solo },
                         set: { mode in
-                            sessionStore.changeDJMode(mode)
-                            toastManager.show(.modeChanged, message: "Switched to \(mode.rawValue)")
+                            if PirateRadioApp.demoMode {
+                                sessionStore.changeDJMode(mode)
+                                toastManager.show(.modeChanged, message: "Switched to \(mode.rawValue)")
+                            } else {
+                                toastManager.show(.comingSoon, message: "DJ mode switching coming soon")
+                            }
                             showDJModePicker = false
                         }
                     ))
