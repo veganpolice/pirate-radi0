@@ -54,6 +54,16 @@ struct NowPlayingView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.hidden)
         }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    Task { await sessionStore.leaveSession() }
+                } label: {
+                    Image(systemName: "dial.low")
+                        .foregroundStyle(PirateTheme.signal)
+                }
+            }
+        }
         .onAppear { startEntranceAnimation() }
         .onShake { handleShake() }
     }

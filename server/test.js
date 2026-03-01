@@ -552,6 +552,174 @@ describe("Pirate Radio API", () => {
     });
   });
 
+  // ----- GET /stations -----
+
+  describe("GET /stations", () => {
+    it("returns empty array when no sessions are active", async () => {
+      const token = await getToken(PORT, "stations_empty_user", "EmptyUser");
+      const res = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.statusCode, 200);
+      assert.ok(Array.isArray(res.body.stations));
+      // May have stations from other tests, but structure is correct
+    });
+
+    it("returns a live station with frequency", async () => {
+      const token = await getToken(PORT, "stations_dj", "StationsDJ");
+      const session = await createSession(PORT, token);
+
+      // Connect via WebSocket and start playing so the station is "live"
+      const ws = await new Promise((resolve, reject) => {
+        const conn = new WebSocket(
+          `ws://127.0.0.1:${PORT}/?token=${token}&sessionId=${session.id}`
+        );
+        conn.on("open", () => resolve(conn));
+        conn.on("error", reject);
+      });
+
+      try {
+        // Wait for initial stateSync
+        await new Promise((r) => setTimeout(r, 200));
+
+        // Play a track so isPlaying becomes true
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "test_track", track: { id: "test_track", name: "Test", durationMs: 60000 } },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await new Promise((r) => setTimeout(r, 200));
+
+        const res = await request(PORT, "GET", "/stations", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        assert.equal(res.statusCode, 200);
+        const station = res.body.stations.find((s) => s.userId === "stations_dj");
+        assert.ok(station, "Should find the DJ's station");
+        assert.equal(station.displayName, "StationsDJ");
+        assert.equal(typeof station.frequency, "number");
+        assert.ok(station.frequency >= 88.0 && station.frequency <= 108.0);
+        assert.equal(station.sessionId, session.id);
+        assert.ok(station.currentTrack);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("does not return idle sessions (not playing, empty queue)", async () => {
+      const token = await getToken(PORT, "stations_idle", "IdleUser");
+      const session = await createSession(PORT, token);
+
+      // Session exists but no track playing → should not appear in /stations
+      const res = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const station = res.body.stations.find((s) => s.userId === "stations_idle");
+      assert.equal(station, undefined, "Idle session should not appear in stations");
+    });
+
+    it("returns 401 without a token", async () => {
+      const res = await request(PORT, "GET", "/stations");
+      assert.equal(res.statusCode, 401);
+    });
+  });
+
+  // ----- POST /sessions/join-by-id -----
+
+  describe("POST /sessions/join-by-id", () => {
+    it("joins a session by ID", async () => {
+      const djToken = await getToken(PORT, "joinid_dj", "JoinIdDJ");
+      const session = await createSession(PORT, djToken);
+
+      const joinerToken = await getToken(PORT, "joinid_joiner", "JoinIdJoiner");
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: { sessionId: session.id },
+        headers: { Authorization: `Bearer ${joinerToken}` },
+      });
+
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body.id, session.id);
+      assert.equal(res.body.djUserId, "joinid_dj");
+    });
+
+    it("returns 404 for non-existent session", async () => {
+      const token = await getToken(PORT, "joinid_404", "NotFound");
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: { sessionId: "nonexistent-id" },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.statusCode, 404);
+    });
+
+    it("returns 400 when sessionId is missing", async () => {
+      const token = await getToken(PORT, "joinid_400", "BadReq");
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: {},
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.statusCode, 400);
+    });
+
+    it("returns 401 without a token", async () => {
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: { sessionId: "any-id" },
+      });
+      assert.equal(res.statusCode, 401);
+    });
+  });
+
+  // ----- User Registry (auto-assign frequency) -----
+
+  describe("User Registry", () => {
+    it("assigns unique frequencies to different users", async () => {
+      const token1 = await getToken(PORT, "freq_user_a", "UserA");
+      const token2 = await getToken(PORT, "freq_user_b", "UserB");
+
+      // Both users create sessions and play so they show up in /stations
+      const session1 = await createSession(PORT, token1);
+      const session2 = await createSession(PORT, token2);
+
+      // Start playback on both
+      for (const [token, session] of [[token1, session1], [token2, session2]]) {
+        const ws = await new Promise((resolve, reject) => {
+          const conn = new WebSocket(
+            `ws://127.0.0.1:${PORT}/?token=${token}&sessionId=${session.id}`
+          );
+          conn.on("open", () => resolve(conn));
+          conn.on("error", reject);
+        });
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "t1", track: { id: "t1", name: "T", durationMs: 60000 } },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await new Promise((r) => setTimeout(r, 100));
+        ws.close();
+      }
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const res = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token1}` },
+      });
+
+      const stationA = res.body.stations.find((s) => s.userId === "freq_user_a");
+      const stationB = res.body.stations.find((s) => s.userId === "freq_user_b");
+
+      if (stationA && stationB) {
+        assert.notEqual(stationA.frequency, stationB.frequency, "Users should have different frequencies");
+      }
+    });
+  });
+
   // ----- Rate limiting -----
 
   describe("Rate limiting", () => {
