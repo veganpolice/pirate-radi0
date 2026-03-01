@@ -14,6 +14,12 @@ final class SessionStore {
     private(set) var isLoading = false
     private(set) var error: PirateRadioError?
 
+    // MARK: - Dial Home State
+
+    private(set) var stations: [Station] = []
+    private(set) var isAutoTuning = false
+    private var tuneTask: Task<Void, Never>?
+
     // MARK: - Dependencies
 
     private var syncEngine: SyncEngine?
@@ -110,7 +116,113 @@ final class SessionStore {
         await syncEngine?.stop()
         syncEngine = nil
         session = nil
+        isCreator = false
         connectionState = .disconnected
+    }
+
+    // MARK: - Dial Home Actions
+
+    /// Fetch live stations from the server.
+    func fetchStations() async {
+        do {
+            let token = try await getBackendToken()
+            var request = URLRequest(url: baseURL.appendingPathComponent("stations"))
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return
+            }
+
+            let decoded = try JSONDecoder().decode(StationsResponse.self, from: data)
+            stations = decoded.stations
+        } catch {
+            print("[SessionStore] fetchStations error: \(error)")
+        }
+    }
+
+    /// Auto-tune to the last-listened station (or first live station) on app launch.
+    func autoTune() async {
+        guard !isAutoTuning, session == nil else { return }
+        isAutoTuning = true
+        defer { isAutoTuning = false }
+
+        await fetchStations()
+
+        guard !stations.isEmpty else { return }
+
+        let lastUserId = UserDefaults.standard.string(forKey: "lastTunedUserId")
+        guard let target = stations.first(where: { $0.userId == lastUserId }) ?? stations.first else { return }
+
+        await joinSessionById(target.sessionId)
+        if error == nil {
+            UserDefaults.standard.set(target.userId, forKey: "lastTunedUserId")
+        }
+    }
+
+    /// Tune to a specific station from the dial. Cancel-and-replace for rapid switching.
+    func tuneToStation(_ station: Station) {
+        tuneTask?.cancel()
+        tuneTask = Task {
+            if session != nil {
+                await leaveSession()
+            }
+            guard !Task.isCancelled else { return }
+            await joinSessionById(station.sessionId)
+            if error == nil {
+                UserDefaults.standard.set(station.userId, forKey: "lastTunedUserId")
+            }
+        }
+    }
+
+    /// Join a session by its ID (bypasses code expiry).
+    func joinSessionById(_ sessionId: String) async {
+        isLoading = true
+        error = nil
+
+        do {
+            let backendToken = try await getBackendToken()
+            let sessionInfo = try await joinSessionByIdOnBackend(sessionId: sessionId, token: backendToken)
+
+            var members: [Session.Member] = []
+            let djMember = Session.Member(
+                id: sessionInfo.djUserId,
+                displayName: sessionInfo.djDisplayName ?? sessionInfo.djUserId,
+                isConnected: true,
+                avatarColor: .cyan
+            )
+            members.append(djMember)
+
+            if let myID = authManager.userID, myID != sessionInfo.djUserId {
+                let me = Session.Member(
+                    id: myID,
+                    displayName: authManager.displayName ?? myID,
+                    isConnected: true,
+                    avatarColor: AvatarColor.allCases.filter { $0 != .cyan }.randomElement()!
+                )
+                members.append(me)
+            }
+
+            self.session = Session(
+                id: sessionInfo.id,
+                joinCode: sessionInfo.joinCode,
+                creatorID: sessionInfo.djUserId,
+                djUserID: sessionInfo.djUserId,
+                members: members,
+                queue: [],
+                currentTrack: nil,
+                isPlaying: false,
+                epoch: 0,
+                djMode: .solo
+            )
+
+            try await connectToSession(sessionID: sessionInfo.id, token: backendToken)
+        } catch {
+            self.error = .sessionNotFound
+        }
+
+        isLoading = false
     }
 
     // MARK: - DJ Actions
@@ -393,6 +505,23 @@ final class SessionStore {
         )
     }
 
+    private func joinSessionByIdOnBackend(sessionId: String, token: String) async throws -> JoinSessionResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("sessions/join-by-id"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = ["sessionId": sessionId]
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw PirateRadioError.sessionNotFound
+        }
+
+        return try JSONDecoder().decode(JoinSessionResponse.self, from: data)
+    }
+
     private func joinSessionOnBackend(code: String, token: String) async throws -> JoinSessionResponse {
         var request = URLRequest(url: baseURL.appendingPathComponent("sessions/join"))
         request.httpMethod = "POST"
@@ -524,4 +653,8 @@ private struct JoinSessionResponse: Codable {
     let djUserId: String
     let djDisplayName: String?
     let memberCount: Int
+}
+
+private struct StationsResponse: Codable {
+    let stations: [Station]
 }

@@ -141,7 +141,7 @@ struct SessionRootView: View {
                         CreateSessionView()
                     }
                 } else {
-                    SessionLobbyView()
+                    DialHomeView()
                 }
             }
         }
