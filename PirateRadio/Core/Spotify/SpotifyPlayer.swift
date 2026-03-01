@@ -1,4 +1,8 @@
 import Foundation
+import SpotifyiOS
+import os
+
+private let logger = Logger(subsystem: "com.pirateradio", category: "SpotifyPlayer")
 
 /// State machine wrapper around the SpotifyiOS App Remote SDK.
 ///
@@ -7,10 +11,6 @@ import Foundation
 /// to prevent overlapping operations and measure playback latency.
 ///
 /// States: IDLE → PREPARING → WAITING_FOR_CALLBACK → PLAYING → IDLE
-///
-/// Note: In a real build, this would import SpotifyiOS and use SPTAppRemote.
-/// For now, this implements the protocol with the state machine structure
-/// ready for SDK integration.
 actor SpotifyPlayer: MusicSource {
     // MARK: - State Machine
 
@@ -29,6 +29,18 @@ actor SpotifyPlayer: MusicSource {
     private let playbackContinuation: AsyncStream<PlaybackState>.Continuation
     let playbackStateStream: AsyncStream<PlaybackState>
 
+    /// The SPTAppRemote instance from SpotifyAuthManager.
+    /// nonisolated(unsafe) because SPTAppRemote is thread-safe internally
+    /// but not marked Sendable (Obj-C class).
+    nonisolated(unsafe) private let appRemote: SPTAppRemote
+
+    /// Called when a track reaches its end (paused near duration).
+    private var onTrackEnded: (() -> Void)?
+
+    func setOnTrackEnded(_ handler: @escaping () -> Void) {
+        onTrackEnded = handler
+    }
+
     /// Average measured latency from play() call to actual playback start.
     /// Used by the sync engine to calibrate coordinated playback timing.
     var averagePlayLatency: TimeInterval {
@@ -36,10 +48,14 @@ actor SpotifyPlayer: MusicSource {
         return latencyMeasurements.suffix(5).reduce(0, +) / Double(min(latencyMeasurements.count, 5))
     }
 
-    init() {
+    init(appRemote: SPTAppRemote) {
         let (stream, continuation) = AsyncStream.makeStream(of: PlaybackState.self, bufferingPolicy: .bufferingNewest(1))
         self.playbackStateStream = stream
         self.playbackContinuation = continuation
+        self.appRemote = appRemote
+
+        // Subscribe to player state changes once connected
+        Task { await self.subscribeToPlayerState() }
     }
 
     // MARK: - MusicSource Protocol
@@ -55,7 +71,11 @@ actor SpotifyPlayer: MusicSource {
     }
 
     func pause() async throws {
-        // TODO: Call spotifyAppRemote.playerAPI?.pause()
+        appRemote.playerAPI?.pause { _, error in
+            if let error {
+                logger.error("Pause failed: \(error.localizedDescription)")
+            }
+        }
         state = .idle
         playbackContinuation.yield(PlaybackState(
             trackID: currentTrackID,
@@ -66,12 +86,27 @@ actor SpotifyPlayer: MusicSource {
     }
 
     func seek(to position: Duration) async throws {
-        // TODO: Call spotifyAppRemote.playerAPI?.seek(toPosition: Int(position.seconds * 1000))
+        let positionMs = Int(position.components.seconds * 1000 + position.components.attoseconds / 1_000_000_000_000_000)
+        appRemote.playerAPI?.seek(toPosition: positionMs) { _, error in
+            if let error {
+                logger.error("Seek failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     func currentPosition() async throws -> Duration {
-        // TODO: Query from spotifyAppRemote.playerAPI?.getPlayerState
-        return .zero
+        try await withCheckedThrowingContinuation { continuation in
+            appRemote.playerAPI?.getPlayerState { result, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let playerState = result as? SPTAppRemotePlayerState {
+                    let ms = playerState.playbackPosition
+                    continuation.resume(returning: .milliseconds(ms))
+                } else {
+                    continuation.resume(returning: .zero)
+                }
+            }
+        }
     }
 
     // MARK: - SDK Callback (called when Spotify confirms playback started)
@@ -105,8 +140,33 @@ actor SpotifyPlayer: MusicSource {
         guard case .waitingForCallback(let expected, _) = state, expected == trackID else {
             return
         }
+        logger.warning("Playback callback timed out for track: \(trackID)")
         state = .idle
         processPending()
+    }
+
+    /// Called when player state changes from Spotify. Updates internal state.
+    func handlePlayerStateChange(_ playerState: SPTAppRemotePlayerState) {
+        let trackURI = playerState.track.uri
+        // Extract track ID from URI like "spotify:track:abc123"
+        let trackID = trackURI.components(separatedBy: ":").last ?? trackURI
+
+        if case .waitingForCallback(let expected, _) = state, expected == trackID {
+            didStartPlayback(trackID: trackID)
+        }
+
+        playbackContinuation.yield(PlaybackState(
+            trackID: trackID,
+            isPlaying: !playerState.isPaused,
+            positionSeconds: Double(playerState.playbackPosition) / 1000.0,
+            timestamp: UInt64(Date.now.timeIntervalSince1970 * 1000)
+        ))
+
+        // Detect track end: paused and near the end of the track
+        if playerState.isPaused,
+           playerState.playbackPosition >= Int(playerState.track.duration) - 1000 {
+            onTrackEnded?()
+        }
     }
 
     // MARK: - Private
@@ -121,9 +181,20 @@ actor SpotifyPlayer: MusicSource {
     private func beginPlayback(trackID: String, position: Duration) async throws {
         state = .preparing(trackID)
 
-        // TODO: Replace with actual Spotify SDK call:
-        // spotifyAppRemote.playerAPI?.play("spotify:track:\(trackID)")
-        // spotifyAppRemote.playerAPI?.seek(toPosition: Int(position.seconds * 1000))
+        let uri = "spotify:track:\(trackID)"
+        let positionMs = Int(position.components.seconds * 1000 + position.components.attoseconds / 1_000_000_000_000_000)
+
+        appRemote.playerAPI?.play(uri) { [positionMs] _, error in
+            if let error {
+                logger.error("Play failed: \(error.localizedDescription)")
+            } else if positionMs > 0 {
+                self.appRemote.playerAPI?.seek(toPosition: positionMs) { _, error in
+                    if let error {
+                        logger.error("Seek after play failed: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
 
         let deadline = Date.now.addingTimeInterval(callbackTimeout)
         state = .waitingForCallback(trackID, deadline: deadline)
@@ -144,6 +215,24 @@ actor SpotifyPlayer: MusicSource {
             case .play(let trackID, let position):
                 try? await beginPlayback(trackID: trackID, position: position)
             }
+        }
+    }
+
+    private func subscribeToPlayerState() {
+        // Wait briefly for connection to establish
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard appRemote.isConnected else {
+                logger.info("App Remote not connected, skipping player state subscription")
+                return
+            }
+            appRemote.playerAPI?.subscribe(toPlayerState: { _, error in
+                if let error {
+                    logger.error("Failed to subscribe to player state: \(error.localizedDescription)")
+                } else {
+                    logger.notice("Subscribed to Spotify player state changes")
+                }
+            })
         }
     }
 

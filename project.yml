@@ -9,7 +9,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: "A9738D53DZ"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
 
@@ -26,7 +26,7 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: PirateRadio/Resources/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.pirateradio.app
+        PRODUCT_BUNDLE_IDENTIFIER: dev.pirateradio.app
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         TARGETED_DEVICE_FAMILY: "1"

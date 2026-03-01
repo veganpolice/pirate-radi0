@@ -57,7 +57,8 @@ actor WebSocketTransport: SessionTransport {
             throw PirateRadioError.notConnected
         }
 
-        let data = try JSONEncoder().encode(message)
+        let serverJSON = Self.encodeForServer(message)
+        let data = try JSONSerialization.data(withJSONObject: serverJSON)
         try await task.send(.data(data))
     }
 
@@ -101,7 +102,9 @@ actor WebSocketTransport: SessionTransport {
                     let message = try await task.receive()
                     await self?.handleReceivedMessage(message)
                 } catch {
-                    await self?.handleDisconnection(error: error)
+                    // Capture close code before the task reference is lost
+                    let closeCode = task.closeCode.rawValue
+                    await self?.handleDisconnection(error: error, closeCode: Int(closeCode))
                     break
                 }
             }
@@ -120,7 +123,19 @@ actor WebSocketTransport: SessionTransport {
             return
         }
 
-        guard let syncMessage = try? JSONDecoder().decode(SyncMessage.self, from: data) else {
+        // Guard against oversized messages (DoS protection)
+        guard data.count <= 512_000 else {
+            print("[WebSocket] Message too large (\(data.count) bytes), dropping")
+            return
+        }
+
+        guard let serverMessage = try? JSONDecoder().decode(ServerMessage.self, from: data) else {
+            print("[WebSocket] Failed to decode server message: \(String(data: data, encoding: .utf8) ?? "?")")
+            return
+        }
+
+        guard let syncMessage = Self.translate(serverMessage, rawData: data) else {
+            print("[WebSocket] Unhandled server message type: \(serverMessage.type)")
             return
         }
 
@@ -135,10 +150,234 @@ actor WebSocketTransport: SessionTransport {
         messageContinuation.yield(syncMessage)
     }
 
+    // MARK: - Server → Client Translation
+
+    private static func translate(_ msg: ServerMessage, rawData: Data) -> SyncMessage? {
+        let seq = msg.seq ?? 0
+        let epoch = msg.epoch ?? 0
+        let ts = msg.timestamp ?? 0
+        let d = msg.data
+
+        let type: SyncMessage.SyncMessageType?
+
+        switch msg.type {
+        case "stateSync":
+            type = translateStateSync(d, rawData: rawData)
+
+        case "memberJoined":
+            let userID = d?["userId"]?.stringValue ?? ""
+            let displayName = d?["displayName"]?.stringValue ?? userID
+            type = .memberJoined(userID: userID, displayName: displayName)
+
+        case "memberLeft":
+            let userID = d?["userId"]?.stringValue ?? ""
+            type = .memberLeft(userID)
+
+        case "playPrepare":
+            let trackID = d?["trackId"]?.stringValue ?? d?["trackID"]?.stringValue ?? ""
+            let deadline = UInt64(d?["prepareDeadline"]?.doubleValue ?? 0)
+            type = .playPrepare(trackID: trackID, prepareDeadline: deadline)
+
+        case "playCommit":
+            let trackID = d?["trackId"]?.stringValue ?? d?["trackID"]?.stringValue ?? ""
+            let startAt = UInt64(d?["ntpTimestamp"]?.doubleValue ?? d?["startAtNtp"]?.doubleValue ?? 0)
+            let refSeq = UInt64(d?["refSeq"]?.doubleValue ?? 0)
+            type = .playCommit(trackID: trackID, startAtNtp: startAt, refSeq: refSeq)
+
+        case "pause":
+            let atNtp = UInt64(d?["ntpTimestamp"]?.doubleValue ?? Double(ts))
+            type = .pause(atNtp: atNtp)
+
+        case "resume":
+            let atNtp = UInt64(d?["executionTime"]?.doubleValue ?? d?["ntpTimestamp"]?.doubleValue ?? Double(ts))
+            type = .resume(atNtp: atNtp)
+
+        case "seek":
+            let posMs = d?["positionMs"]?.intValue ?? 0
+            let atNtp = UInt64(d?["ntpTimestamp"]?.doubleValue ?? Double(ts))
+            type = .seek(positionMs: posMs, atNtp: atNtp)
+
+        case "queueUpdate":
+            let tracks = decodeTrackArray(d?["queue"])
+            type = .queueUpdate(tracks)
+
+        case "driftReport":
+            let trackID = d?["trackId"]?.stringValue ?? ""
+            let posMs = d?["positionMs"]?.intValue ?? 0
+            let ntpTs = UInt64(d?["ntpTimestamp"]?.doubleValue ?? 0)
+            type = .driftReport(trackID: trackID, positionMs: posMs, ntpTimestamp: ntpTs)
+
+        case "pong":
+            // Clock sync response — not a SyncMessage, ignore here
+            return nil
+
+        default:
+            return nil
+        }
+
+        guard let msgType = type else { return nil }
+
+        return SyncMessage(
+            id: UUID(),
+            type: msgType,
+            sequenceNumber: seq,
+            epoch: epoch,
+            timestamp: ts
+        )
+    }
+
+    private static func translateStateSync(_ data: JSONValue?, rawData: Data) -> SyncMessage.SyncMessageType? {
+        guard let d = data else { return nil }
+
+        // Parse the stateSync data into a SessionSnapshot
+        let trackID = d["currentTrack"]?["id"]?.stringValue
+        let positionMs = d["positionMs"]?.doubleValue ?? 0
+        let positionTimestamp = UInt64(d["positionTimestamp"]?.doubleValue ?? 0)
+        let isPlaying = d["isPlaying"]?.boolValue ?? false
+        let djUserID = d["djUserId"]?.stringValue ?? ""
+        let epoch = UInt64(d["epoch"]?.doubleValue ?? 0)
+        let sequence = UInt64(d["sequence"]?.doubleValue ?? 0)
+
+        // Parse queue — array of full track objects
+        let queue = decodeTrackArray(d["queue"])
+
+        // Parse members
+        var members: [SessionSnapshot.SnapshotMember] = []
+        if let membersArray = d["members"]?.arrayValue {
+            for m in membersArray {
+                let userId = m["userId"]?.stringValue ?? ""
+                let displayName = m["displayName"]?.stringValue ?? userId
+                members.append(SessionSnapshot.SnapshotMember(userId: userId, displayName: displayName))
+            }
+        }
+
+        // Try to decode currentTrack as a full Track object
+        var currentTrack: Track?
+        if let currentTrackValue = d["currentTrack"], currentTrackValue.objectValue?["id"] != nil {
+            // Re-encode just the track portion and try Codable decode
+            if let trackData = try? JSONSerialization.data(withJSONObject: jsonValueToAny(currentTrackValue) ?? [:]) {
+                currentTrack = try? JSONDecoder().decode(Track.self, from: trackData)
+            }
+        }
+
+        let snapshot = SessionSnapshot(
+            trackID: trackID,
+            positionAtAnchor: positionMs / 1000.0,
+            ntpAnchor: positionTimestamp,
+            playbackRate: isPlaying ? 1.0 : 0.0,
+            queue: queue,
+            djUserID: djUserID,
+            epoch: epoch,
+            sequenceNumber: sequence,
+            members: members,
+            currentTrack: currentTrack
+        )
+
+        return .stateSync(snapshot)
+    }
+
+    /// Convert JSONValue to Any for JSONSerialization interop.
+    private static func jsonValueToAny(_ value: JSONValue) -> Any? {
+        switch value {
+        case .string(let v): return v
+        case .int(let v): return v
+        case .double(let v): return v
+        case .bool(let v): return v
+        case .null: return nil
+        case .array(let arr): return arr.map { jsonValueToAny($0) ?? NSNull() }
+        case .object(let obj):
+            var dict: [String: Any] = [:]
+            for (k, v) in obj {
+                dict[k] = jsonValueToAny(v) ?? NSNull()
+            }
+            return dict
+        }
+    }
+
+    /// Decode an array of Track objects from a JSONValue array.
+    private static func decodeTrackArray(_ value: JSONValue?) -> [Track] {
+        guard let arr = value?.arrayValue else { return [] }
+        return arr.compactMap { item -> Track? in
+            guard let dict = jsonValueToAny(item) else { return nil }
+            guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+            return try? JSONDecoder().decode(Track.self, from: data)
+        }
+    }
+
+    // MARK: - Client → Server Encoding
+
+    static func encodeForServer(_ message: SyncMessage) -> [String: Any] {
+        var result: [String: Any] = [
+            "seq": message.sequenceNumber,
+            "epoch": message.epoch,
+            "timestamp": message.timestamp,
+        ]
+
+        switch message.type {
+        case .playPrepare(let trackID, let deadline):
+            result["type"] = "playPrepare"
+            result["data"] = ["trackId": trackID, "prepareDeadline": deadline]
+
+        case .playCommit(let trackID, let startAtNtp, let refSeq):
+            result["type"] = "playCommit"
+            result["data"] = ["trackId": trackID, "ntpTimestamp": startAtNtp, "refSeq": refSeq]
+
+        case .pause(let atNtp):
+            result["type"] = "pause"
+            result["data"] = ["ntpTimestamp": atNtp]
+
+        case .resume(let atNtp):
+            result["type"] = "resume"
+            result["data"] = ["executionTime": atNtp, "ntpTimestamp": atNtp]
+
+        case .seek(let positionMs, let atNtp):
+            result["type"] = "seek"
+            result["data"] = ["positionMs": positionMs, "ntpTimestamp": atNtp]
+
+        case .skip:
+            result["type"] = "skip"
+            result["data"] = [String: Any]()
+
+        case .addToQueue(let track, let nonce):
+            result["type"] = "addToQueue"
+            result["data"] = [
+                "track": [
+                    "id": track.id, "name": track.name, "artist": track.artist,
+                    "albumName": track.albumName,
+                    "albumArtURL": track.albumArtURL?.absoluteString ?? "",
+                    "durationMs": track.durationMs,
+                ] as [String: Any],
+                "nonce": nonce,
+            ] as [String: Any]
+
+        case .driftReport(let trackID, let positionMs, let ntpTimestamp):
+            result["type"] = "driftReport"
+            result["data"] = ["trackId": trackID, "positionMs": positionMs, "ntpTimestamp": ntpTimestamp]
+
+        case .stateSync, .queueUpdate, .memberJoined, .memberLeft:
+            // These are server-originated; client doesn't send them
+            result["type"] = "unknown"
+            result["data"] = [String: Any]()
+        }
+
+        return result
+    }
+
     // MARK: - Reconnection
 
-    private func handleDisconnection(error: Error) {
+    private func handleDisconnection(error: Error, closeCode: Int = 0) {
         guard shouldStayConnected, !isReconnecting else { return }
+
+        // Check for permanent close codes that shouldn't trigger reconnection
+        // 4004 = session not found, 4009 = session full
+        if closeCode == 4004 || closeCode == 4009 {
+            let reason = closeCode == 4004 ? "Session no longer exists" : "Session is full"
+            print("[WebSocket] Permanent close code \(closeCode): \(reason)")
+            webSocketTask = nil
+            shouldStayConnected = false
+            stateContinuation.yield(.failed(reason))
+            return
+        }
 
         webSocketTask = nil
         isReconnecting = true
@@ -170,4 +409,5 @@ actor WebSocketTransport: SessionTransport {
             }
         }
     }
+
 }
