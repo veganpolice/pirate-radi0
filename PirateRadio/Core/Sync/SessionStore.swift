@@ -19,6 +19,12 @@ final class SessionStore {
     private(set) var stations: [Station] = []
     private(set) var isAutoTuning = false
     private var tuneTask: Task<Void, Never>?
+    private var tuneGeneration: UUID = UUID()
+
+    // MARK: - Token Cache
+
+    private var cachedToken: String?
+    private var tokenExpiry: Date?
 
     // MARK: - Dependencies
 
@@ -162,14 +168,23 @@ final class SessionStore {
     }
 
     /// Tune to a specific station from the dial. Cancel-and-replace for rapid switching.
+    /// Uses a generation counter so superseded joins clean up after themselves.
     func tuneToStation(_ station: Station) {
+        guard session?.id != station.sessionId else { return }
         tuneTask?.cancel()
+        let generation = UUID()
+        tuneGeneration = generation
         tuneTask = Task {
             if session != nil {
                 await leaveSession()
             }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, tuneGeneration == generation else { return }
             await joinSessionById(station.sessionId)
+            guard tuneGeneration == generation else {
+                // A newer tune request superseded us — leave what we just joined
+                await leaveSession()
+                return
+            }
             if error == nil {
                 UserDefaults.standard.set(station.userId, forKey: "lastTunedUserId")
             }
@@ -444,6 +459,11 @@ final class SessionStore {
     }
 
     private func getBackendToken() async throws -> String {
+        // Return cached token if still valid (refresh 1 hour before expiry)
+        if let token = cachedToken, let expiry = tokenExpiry, expiry > Date().addingTimeInterval(3600) {
+            return token
+        }
+
         // Profile may still be loading on fresh launch — wait briefly for userID and displayName
         if authManager.userID == nil || authManager.displayName == nil {
             for _ in 0..<10 {
@@ -464,6 +484,9 @@ final class SessionStore {
 
         let (data, _) = try await URLSession.shared.data(for: request)
         let response = try JSONDecoder().decode(AuthResponse.self, from: data)
+
+        cachedToken = response.token
+        tokenExpiry = Date().addingTimeInterval(24 * 3600) // Server issues 24h tokens
         return response.token
     }
 

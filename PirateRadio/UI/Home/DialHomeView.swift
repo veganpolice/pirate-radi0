@@ -4,7 +4,6 @@ import SwiftUI
 /// as notches on the dial, and offers a "Start Broadcasting" CTA.
 struct DialHomeView: View {
     @Environment(SessionStore.self) private var sessionStore
-    @Environment(ToastManager.self) private var toastManager
 
     @State private var dialValue: Double = 0.5
 
@@ -56,9 +55,9 @@ struct DialHomeView: View {
         .task {
             await sessionStore.autoTune()
         }
-        .onAppear {
-            // Re-fetch stations when returning from NowPlayingView
-            if !sessionStore.isAutoTuning {
+        .onChange(of: sessionStore.session) { oldValue, newValue in
+            // Re-fetch stations when returning from a session (e.g. leaving NowPlayingView)
+            if oldValue != nil && newValue == nil {
                 Task { await sessionStore.fetchStations() }
             }
         }
