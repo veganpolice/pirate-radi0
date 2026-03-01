@@ -16,6 +16,9 @@ const PING_INTERVAL_MS = 15_000;
 const PONG_TIMEOUT_MS = 5_000;
 const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const CODE_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const MAX_TRACK_DURATION_MS = 30 * 60 * 1000; // 30 minutes — clamp for timer safety
+const MAX_QUEUE_SIZE = 100;
+const GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
 
 // --- In-Memory State ---
 
@@ -300,16 +303,7 @@ wss.on("connection", (ws) => {
 
       // Clean up empty session (with grace period for active stations)
       if (session.members.size === 0) {
-        if (session.queue.length > 0 || session.isPlaying) {
-          // Grace period: keep station alive for 5 min if queue has tracks
-          if (!session.destroyTimeout) {
-            session.destroyTimeout = setTimeout(() => {
-              destroySession(session.id);
-            }, 5 * 60 * 1000);
-          }
-        } else {
-          destroySession(session.id);
-        }
+        destroyOrGrace(session);
       }
     }
   });
@@ -422,6 +416,7 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+      if (session.isPlaying) scheduleAdvancement(session);
       break;
     }
 
@@ -452,6 +447,7 @@ function handleMessage(session, senderId, msg) {
 
     case "addToQueue": {
       if (!msg.data?.track || !msg.data?.nonce) return;
+      if (session.queue.length >= MAX_QUEUE_SIZE) return;
       // Idempotency: check nonce
       if (session.queue.some((t) => t.nonce === msg.data.nonce)) return;
 
@@ -552,8 +548,8 @@ function scheduleAdvancement(session) {
   clearAdvancement(session);
   if (!session.currentTrack || !session.isPlaying) return;
 
-  const durationMs = parseInt(session.currentTrack.durationMs);
-  if (!durationMs || durationMs <= 0) return;
+  const durationMs = Number(session.currentTrack.durationMs);
+  if (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > MAX_TRACK_DURATION_MS) return;
 
   const elapsed = Date.now() - session.positionTimestamp;
   const currentPositionMs = session.positionMs + elapsed;
@@ -608,6 +604,18 @@ function advanceQueue(session) {
       seq: ++session.sequence,
       timestamp: Date.now(),
     });
+  }
+}
+
+function destroyOrGrace(session) {
+  if (session.queue.length > 0 || session.isPlaying) {
+    if (!session.destroyTimeout) {
+      session.destroyTimeout = setTimeout(() => {
+        destroySession(session.id);
+      }, GRACE_PERIOD_MS);
+    }
+  } else {
+    destroySession(session.id);
   }
 }
 
@@ -722,15 +730,7 @@ setInterval(() => {
     }
 
     if (session.members.size === 0) {
-      if (session.queue.length > 0 || session.isPlaying) {
-        if (!session.destroyTimeout) {
-          session.destroyTimeout = setTimeout(() => {
-            destroySession(sessionId);
-          }, 5 * 60 * 1000);
-        }
-      } else {
-        destroySession(sessionId);
-      }
+      destroyOrGrace(session);
     }
   }
 }, PING_INTERVAL_MS);
