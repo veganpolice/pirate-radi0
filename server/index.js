@@ -34,6 +34,26 @@ const sessionCreationLog = new Map();
 /** @type {Map<string, number[]>} ip → attempt timestamps */
 const joinAttemptLog = new Map();
 
+/** @type {Map<string, {displayName: string, frequency: number}>} userId → user info */
+const userRegistry = new Map();
+
+let nextFrequency = 88.1;
+
+function assignFrequency() {
+  // Find next available frequency (skip taken ones)
+  const taken = new Set([...userRegistry.values()].map((u) => u.frequency));
+  let freq = nextFrequency;
+  let attempts = 0;
+  while (taken.has(freq) && attempts < 200) {
+    freq = Math.round((freq + 0.2) * 10) / 10;
+    if (freq > 107.9) freq = 88.1;
+    attempts++;
+  }
+  nextFrequency = Math.round((freq + 0.2) * 10) / 10;
+  if (nextFrequency > 107.9) nextFrequency = 88.1;
+  return freq;
+}
+
 /**
  * @typedef {Object} Session
  * @property {string} id
@@ -79,6 +99,17 @@ app.post("/auth", (req, res) => {
   console.log(`[auth] ${displayName || spotifyUserId}`);
   if (!spotifyUserId || typeof spotifyUserId !== "string") {
     return res.status(400).json({ error: "spotifyUserId required" });
+  }
+
+  // Register/update user in registry (auto-assign frequency on first auth)
+  if (!userRegistry.has(spotifyUserId)) {
+    userRegistry.set(spotifyUserId, {
+      displayName: displayName || spotifyUserId,
+      frequency: assignFrequency(),
+    });
+    console.log(`[auth] registered ${displayName || spotifyUserId} at ${userRegistry.get(spotifyUserId).frequency} MHz`);
+  } else {
+    userRegistry.get(spotifyUserId).displayName = displayName || spotifyUserId;
   }
 
   const token = jwt.sign(
@@ -164,6 +195,53 @@ app.get("/sessions/:id", authenticateHTTP, (req, res) => {
   }
 
   res.json(sessionSnapshot(session));
+});
+
+// List live stations (for dial home)
+app.get("/stations", authenticateHTTP, (_req, res) => {
+  const stations = [];
+  for (const session of sessions.values()) {
+    if (!session.isPlaying && session.queue.length === 0) continue;
+
+    const user = userRegistry.get(session.creatorId);
+    if (!user) continue;
+
+    stations.push({
+      userId: session.creatorId,
+      displayName: user.displayName,
+      frequency: user.frequency,
+      sessionId: session.id,
+      currentTrack: session.currentTrack,
+    });
+  }
+  res.json({ stations });
+});
+
+// Join session by ID (bypasses code expiry for dial-based joining)
+app.post("/sessions/join-by-id", authenticateHTTP, (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId || typeof sessionId !== "string") {
+    return res.status(400).json({ error: "sessionId required" });
+  }
+
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+
+  if (session.members.size >= MAX_MEMBERS) {
+    return res.status(409).json({ error: "Session is full" });
+  }
+
+  const djMember = session.members.get(session.djUserId);
+  console.log(`[session:join-by-id] session=${session.id} dj=${djMember?.displayName || session.djUserId} members=${session.members.size}`);
+  res.json({
+    id: session.id,
+    joinCode: session.joinCode,
+    djUserId: session.djUserId,
+    djDisplayName: djMember?.displayName || session.djUserId,
+    memberCount: session.members.size,
+  });
 });
 
 // --- WebSocket Server ---
