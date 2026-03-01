@@ -46,8 +46,10 @@
 		C31E0020CA57B07870CD97F4 /* MemberProfileCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD24E4C942637EC14BE6E13 /* MemberProfileCard.swift */; };
 		CA1FB9FCD73ED9CDBA07D7E2 /* VinylArtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD902CFB43ED0E40F25AF39C /* VinylArtView.swift */; };
 		CE512A01F9F65D69D5F26A92 /* DJModePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D6BA525897044C3AF5A8EB7 /* DJModePicker.swift */; };
+		CF606195AFE99BE5DDAB259C /* DialHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48F0125F33ADECC1309A2096 /* DialHomeView.swift */; };
 		D09FC1C53ED5F49E2A39733B /* SignalLostOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE84CFC1C0588A8910FF0E4 /* SignalLostOverlay.swift */; };
 		D15F4F4C128F9A7E9AB670F1 /* SpotifyClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D3F3191E8157F52BCC3CD6 /* SpotifyClient.swift */; };
+		D2108F4C20EFD1FC15BA9122 /* Station.swift in Sources */ = {isa = PBXBuildFile; fileRef = B953E220C23B403537F65D2F /* Station.swift */; };
 		D360D4014DAC95A36EA16D48 /* ConnectionStatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50858029E4349C69A37E144C /* ConnectionStatusBadge.swift */; };
 		D7E96E4A9599B26E5CE9AE7A /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F73EDEFF80F51A9FFEA6036 /* DiscoveryView.swift */; };
 		D877D1A1200F636F20A5F894 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 358DBF75544F644C797C711E /* SyncEngine.swift */; };
@@ -91,6 +93,7 @@
 		3E03792B7C201F38351FE541 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		408B663AD10B9AE7F3377AFC /* PirateRadio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PirateRadio.entitlements; sourceTree = "<group>"; };
 		453E51C40B34CC4649FCD917 /* ServerMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessage.swift; sourceTree = "<group>"; };
+		48F0125F33ADECC1309A2096 /* DialHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialHomeView.swift; sourceTree = "<group>"; };
 		4FD24E4C942637EC14BE6E13 /* MemberProfileCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberProfileCard.swift; sourceTree = "<group>"; };
 		50858029E4349C69A37E144C /* ConnectionStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusBadge.swift; sourceTree = "<group>"; };
 		5D6BA525897044C3AF5A8EB7 /* DJModePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJModePicker.swift; sourceTree = "<group>"; };
@@ -110,6 +113,7 @@
 		AA7A9CA2C320EA8B272E851A /* SpotifyPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyPlayer.swift; sourceTree = "<group>"; };
 		AACFBFA27C23C7AB6F0C857F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B62EF1958AA35C80900C20BF /* PirateRadioTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PirateRadioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B953E220C23B403537F65D2F /* Station.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Station.swift; sourceTree = "<group>"; };
 		C30F0DAFC947BDA1AE8BD995 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C33C3112283966EE1D927A76 /* TrackProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackProgressBar.swift; sourceTree = "<group>"; };
 		C98F9153B2BC2FC35733B3D6 /* WalkieTalkieButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkieTalkieButton.swift; sourceTree = "<group>"; };
@@ -154,6 +158,7 @@
 			children = (
 				9A84A72518AFAE7CD71F9A95 /* PirateRadioError.swift */,
 				A9E36B2DD0E2E2D8527ED28D /* Session.swift */,
+				B953E220C23B403537F65D2F /* Station.swift */,
 				227D358A247C684183CB4B21 /* SyncCommand.swift */,
 				72354CBBD5BF61C4BA07752D /* Track.swift */,
 			);
@@ -167,6 +172,14 @@
 				65EE5A4C7C5251D3674D747F /* PirateRadioTests */,
 				77C7484DAC1085E0B7399874 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		142D32D8EA446CE062B1DD64 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				48F0125F33ADECC1309A2096 /* DialHomeView.swift */,
+			);
+			path = Home;
 			sourceTree = "<group>";
 		};
 		2E0208FF0597E3C4B63D1F23 /* Session */ = {
@@ -328,6 +341,7 @@
 				A9E2EE0E85C8F745451C4F72 /* Auth */,
 				FBB7FD4C06E206B8725689CF /* Chairlift */,
 				905BE6B9FF952FF3EC82AE7C /* Components */,
+				142D32D8EA446CE062B1DD64 /* Home */,
 				CA48167EA335976C24196F7A /* NowPlaying */,
 				0A142E4D76CB2DF17119CF3E /* Onboarding */,
 				2E0208FF0597E3C4B63D1F23 /* Session */,
@@ -510,6 +524,7 @@
 				D360D4014DAC95A36EA16D48 /* ConnectionStatusBadge.swift in Sources */,
 				0563BA982041A6F9AAE0FEA2 /* CreateSessionView.swift in Sources */,
 				CE512A01F9F65D69D5F26A92 /* DJModePicker.swift in Sources */,
+				CF606195AFE99BE5DDAB259C /* DialHomeView.swift in Sources */,
 				D7E96E4A9599B26E5CE9AE7A /* DiscoveryView.swift in Sources */,
 				95E251D4BF3808924614D9D8 /* FrequencyDial.swift in Sources */,
 				A319CAEB80C6DAD005E19208 /* GloveButton.swift in Sources */,
@@ -541,6 +556,7 @@
 				7722322289D59F2D65D35894 /* SpotifyAuthView.swift in Sources */,
 				D15F4F4C128F9A7E9AB670F1 /* SpotifyClient.swift in Sources */,
 				796CF29D034ADEFCB8757CC7 /* SpotifyPlayer.swift in Sources */,
+				D2108F4C20EFD1FC15BA9122 /* Station.swift in Sources */,
 				A89C4FA5BAF357BF0445FD01 /* SyncCommand.swift in Sources */,
 				D877D1A1200F636F20A5F894 /* SyncEngine.swift in Sources */,
 				0EB139CAE1391EAF208FF754 /* ToastManager.swift in Sources */,
@@ -625,7 +641,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -704,7 +720,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
