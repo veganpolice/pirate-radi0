@@ -19,6 +19,7 @@ final class SessionStore {
     private var syncEngine: SyncEngine?
     private let authManager: SpotifyAuthManager
     private let baseURL: URL
+    var toastManager: ToastManager?
 
     // MARK: - Init
 
@@ -148,6 +149,11 @@ final class SessionStore {
             print("[SessionStore] djPlay error: \(error)")
             self.error = .playbackFailed(underlying: error)
             session?.isPlaying = false
+            // Surface Spotify Premium / permissions errors as a toast
+            let desc = (error as NSError).localizedDescription.lowercased()
+            if desc.contains("premium") || desc.contains("permission") || desc.contains("restricted") {
+                toastManager?.show(.spotifyError, message: "Spotify Premium required for playback")
+            }
         }
     }
 
@@ -301,15 +307,17 @@ final class SessionStore {
         // Update queue from snapshot
         session?.queue = snapshot.queue
 
-        // If DJ and the track changed, start playback of the new track
-        if isDJ, snapshot.playbackRate > 0,
-           let track = snapshot.currentTrack,
-           track.id != previousTrackID {
-            Task { await play(track: track) }
+        // Playback is handled by SyncEngine.handleStateSync() for ALL clients
+        // (plays locally via musicSource.play without sending PREPARE+COMMIT back to server).
+        // No DJ-specific trigger needed here — removes double-play bug when server advances queue.
+
+        // Show toast when station ran out of music (queue empty + stopped playing)
+        if isDJ, snapshot.playbackRate == 0, snapshot.queue.isEmpty, snapshot.currentTrack != nil {
+            toastManager?.show(.queueEmpty, message: "Your station ran out of music")
         }
 
-        // If music is playing and we're a listener, ensure Spotify is ready and retry playback
-        if snapshot.playbackRate > 0 && snapshot.trackID != nil && !isDJ {
+        // If music is playing but Spotify isn't connected, ensure it's ready and retry playback
+        if snapshot.playbackRate > 0 && snapshot.trackID != nil {
             if !authManager.isConnectedToSpotifyApp {
                 print("[SessionStore] stateSync shows active playback — waking Spotify for listener")
                 Task {

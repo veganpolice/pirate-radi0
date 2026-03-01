@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import WebSocket from "ws";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -328,6 +329,226 @@ describe("Pirate Radio API", () => {
         headers: { Authorization: `Bearer ${fakeToken}` },
       });
       assert.equal(res.statusCode, 401);
+    });
+  });
+
+  // ----- Autonomous Queue Advancement -----
+
+  describe("Autonomous Queue Advancement", () => {
+    /**
+     * Connect a WebSocket and collect messages until a condition is met.
+     */
+    function connectWS(port, token, sessionId) {
+      return new Promise((resolve, reject) => {
+        const ws = new WebSocket(
+          `ws://127.0.0.1:${port}/?token=${token}&sessionId=${sessionId}`
+        );
+        const messages = [];
+        ws.on("open", () => resolve({ ws, messages }));
+        ws.on("message", (raw) => {
+          messages.push(JSON.parse(raw.toString()));
+        });
+        ws.on("error", reject);
+      });
+    }
+
+    function waitForMessage(messages, predicate, timeoutMs = 5000) {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error(`Timed out waiting for message (have ${messages.length})`)),
+          timeoutMs
+        );
+        const interval = setInterval(() => {
+          const found = messages.find(predicate);
+          if (found) {
+            clearTimeout(timeout);
+            clearInterval(interval);
+            resolve(found);
+          }
+        }, 50);
+      });
+    }
+
+    it("advances queue when track duration elapses", async () => {
+      const token = await getToken(PORT, "timer_dj", "TimerDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        // Wait for initial stateSync
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        // Set up a track with 1.5s duration and a queue with one more track
+        const track1 = { id: "track1", name: "Track 1", durationMs: 1500 };
+        const track2 = { id: "track2", name: "Track 2", durationMs: 3000 };
+
+        // Add track2 to queue
+        ws.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track: track2, nonce: "nonce-track2" },
+        }));
+        await waitForMessage(messages, (m) => m.type === "queueUpdate");
+
+        // Play track1 via playPrepare + playCommit
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: track1.id, track: track1 },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+
+        // Wait for playCommit broadcast
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+
+        // Now wait for automatic advancement — server should fire stateSync with track2
+        // after ~1.5 seconds
+        const advanceMsg = await waitForMessage(
+          messages,
+          (m) => m.type === "stateSync" && m.data?.currentTrack?.id === "track2",
+          4000
+        );
+
+        assert.ok(advanceMsg, "Should receive stateSync with track2");
+        assert.equal(advanceMsg.data.currentTrack.id, "track2");
+        assert.equal(advanceMsg.data.isPlaying, true);
+        assert.equal(advanceMsg.data.positionMs, 0);
+        assert.ok(advanceMsg.data.queue.length === 0, "Queue should be empty after advancing");
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("stops playing when queue is empty after advancement", async () => {
+      const token = await getToken(PORT, "empty_q_dj", "EmptyQDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        // Play a 1s track with no queue
+        const track = { id: "solo_track", name: "Solo", durationMs: 1000 };
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: track.id, track: track },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+
+        // Wait for stateSync that marks station as idle (isPlaying = false, but with a track still set)
+        const idleMsg = await waitForMessage(
+          messages,
+          (m) => m.type === "stateSync" && m.data?.isPlaying === false && m.data?.currentTrack?.id === "solo_track",
+          3000
+        );
+
+        assert.ok(idleMsg, "Should receive idle stateSync");
+        assert.equal(idleMsg.data.isPlaying, false);
+        // currentTrack is kept for "last played" context
+        assert.equal(idleMsg.data.currentTrack.id, "solo_track");
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("clears timer on pause and reschedules on resume", async () => {
+      const token = await getToken(PORT, "pause_dj", "PauseDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        // Play a 2s track
+        const track = { id: "pause_track", name: "PauseTrack", durationMs: 2000 };
+        const track2 = { id: "next_track", name: "NextTrack", durationMs: 3000 };
+
+        ws.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track: track2, nonce: "nonce-next" },
+        }));
+        await waitForMessage(messages, (m) => m.type === "queueUpdate");
+
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: track.id, track: track },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+
+        // Pause after 500ms — timer should be cleared
+        await new Promise((r) => setTimeout(r, 500));
+        ws.send(JSON.stringify({ type: "pause", data: {} }));
+        await waitForMessage(messages, (m) => m.type === "pause");
+
+        // Wait 2s — track should NOT advance because it's paused
+        await new Promise((r) => setTimeout(r, 2000));
+        const advancedWhilePaused = messages.find(
+          (m) => m.type === "stateSync" && m.data?.currentTrack?.id === "next_track"
+        );
+        assert.equal(advancedWhilePaused, undefined, "Should NOT advance while paused");
+
+        // Resume — timer should reschedule for remaining time
+        ws.send(JSON.stringify({ type: "resume", data: {} }));
+        await waitForMessage(messages, (m) => m.type === "resume");
+
+        // Should advance within ~1.5s (2s track - 0.5s already played)
+        const advanceMsg = await waitForMessage(
+          messages,
+          (m) => m.type === "stateSync" && m.data?.currentTrack?.id === "next_track",
+          3000
+        );
+        assert.ok(advanceMsg, "Should advance after resume");
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("does not schedule timer when durationMs is missing", async () => {
+      const token = await getToken(PORT, "nodur_dj", "NoDurDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        // Play a track with no durationMs
+        const track = { id: "no_dur", name: "NoDuration" };
+        const track2 = { id: "queued", name: "Queued", durationMs: 1000 };
+
+        ws.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track: track2, nonce: "nonce-queued" },
+        }));
+        await waitForMessage(messages, (m) => m.type === "queueUpdate");
+
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: track.id, track: track },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+
+        // Wait 2s — should NOT auto-advance because durationMs is missing
+        await new Promise((r) => setTimeout(r, 2000));
+        const advancedMsg = messages.find(
+          (m) => m.type === "stateSync" && m.data?.currentTrack?.id === "queued"
+        );
+        assert.equal(advancedMsg, undefined, "Should NOT advance when durationMs is missing");
+      } finally {
+        ws.close();
+      }
     });
   });
 

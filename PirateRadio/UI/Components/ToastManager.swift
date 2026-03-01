@@ -20,6 +20,7 @@ final class ToastManager {
         case memberJoined, memberLeft, songRequest, djChanged
         case modeChanged, requestAccepted, requestDeclined
         case voteCast, signalLost, reconnected, voiceClip, comingSoon
+        case queueEmpty, spotifyError
     }
 
     func show(_ type: ToastType, message: String) {
@@ -67,6 +68,8 @@ final class ToastManager {
         case .reconnected: "antenna.radiowaves.left.and.right"
         case .voiceClip: "mic.fill"
         case .comingSoon: "wrench.and.screwdriver"
+        case .queueEmpty: "music.note"
+        case .spotifyError: "exclamationmark.triangle.fill"
         }
     }
 
@@ -77,6 +80,8 @@ final class ToastManager {
         case .songRequest, .signalLost, .memberLeft, .requestDeclined: PirateTheme.flare
         case .voiceClip: PirateTheme.signal
         case .comingSoon: PirateTheme.flare
+        case .queueEmpty: PirateTheme.broadcast
+        case .spotifyError: PirateTheme.flare
         }
     }
 }

@@ -35,7 +35,9 @@ struct PirateRadioApp: App {
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     guard !Self.demoMode else { return }
                     if isAuth && sessionStore == nil {
-                        sessionStore = SessionStore(authManager: authManager)
+                        let store = SessionStore(authManager: authManager)
+                        store.toastManager = toastManager
+                        sessionStore = store
                     } else if !isAuth {
                         sessionStore = nil
                     }
@@ -69,6 +71,8 @@ struct PirateRadioApp: App {
                 .onAppear {
                     // Wire auth manager to AppDelegate for URL callbacks
                     appDelegate.authManager = authManager
+                    // Wire toast manager to session store for queue-empty and error toasts
+                    sessionStore?.toastManager = toastManager
                 }
         }
     }

@@ -47,6 +47,8 @@ const joinAttemptLog = new Map();
  * @property {Array} queue
  * @property {number} lastActivity
  * @property {number} codeCreatedAt
+ * @property {NodeJS.Timeout|null} advancementTimer - server-side queue advancement timer
+ * @property {NodeJS.Timeout|null} destroyTimeout - grace period before destroying memberless sessions
  */
 
 /**
@@ -225,6 +227,12 @@ wss.on("connection", (ws) => {
     existingMember.ws.close(4000, "Replaced by new connection");
   }
 
+  // Cancel grace period if someone reconnects
+  if (session.destroyTimeout) {
+    clearTimeout(session.destroyTimeout);
+    session.destroyTimeout = null;
+  }
+
   session.members.set(userId, {
     userId,
     displayName,
@@ -290,9 +298,18 @@ wss.on("connection", (ws) => {
         });
       }
 
-      // Clean up empty session
+      // Clean up empty session (with grace period for active stations)
       if (session.members.size === 0) {
-        destroySession(session.id);
+        if (session.queue.length > 0 || session.isPlaying) {
+          // Grace period: keep station alive for 5 min if queue has tracks
+          if (!session.destroyTimeout) {
+            session.destroyTimeout = setTimeout(() => {
+              destroySession(session.id);
+            }, 5 * 60 * 1000);
+          }
+        } else {
+          destroySession(session.id);
+        }
       }
     }
   });
@@ -342,6 +359,7 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+      scheduleAdvancement(session);
       break;
     }
 
@@ -349,6 +367,7 @@ function handleMessage(session, senderId, msg) {
       if (senderId !== session.djUserId) return;
 
       session.isPlaying = false;
+      clearAdvancement(session);
       // Snapshot the position at pause time
       if (session.positionTimestamp) {
         const elapsed = Date.now() - session.positionTimestamp;
@@ -385,6 +404,7 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+      scheduleAdvancement(session);
       break;
     }
 
@@ -425,6 +445,7 @@ function handleMessage(session, senderId, msg) {
           seq: session.sequence,
           timestamp: Date.now(),
         });
+        scheduleAdvancement(session);
       }
       break;
     }
@@ -516,6 +537,8 @@ function createSession(creatorId) {
     queue: [],
     lastActivity: Date.now(),
     codeCreatedAt: Date.now(),
+    advancementTimer: null,
+    destroyTimeout: null,
   };
 
   sessions.set(id, session);
@@ -523,9 +546,79 @@ function createSession(creatorId) {
   return session;
 }
 
+// --- Autonomous Queue Advancement ---
+
+function scheduleAdvancement(session) {
+  clearAdvancement(session);
+  if (!session.currentTrack || !session.isPlaying) return;
+
+  const durationMs = parseInt(session.currentTrack.durationMs);
+  if (!durationMs || durationMs <= 0) return;
+
+  const elapsed = Date.now() - session.positionTimestamp;
+  const currentPositionMs = session.positionMs + elapsed;
+  const remainingMs = durationMs - currentPositionMs;
+
+  if (remainingMs <= 0) {
+    advanceQueue(session);
+    return;
+  }
+
+  session.advancementTimer = setTimeout(() => {
+    advanceQueue(session);
+  }, remainingMs);
+}
+
+function clearAdvancement(session) {
+  if (session.advancementTimer) {
+    clearTimeout(session.advancementTimer);
+    session.advancementTimer = null;
+  }
+}
+
+function advanceQueue(session) {
+  const nextTrack = session.queue.shift();
+  if (nextTrack) {
+    session.currentTrack = nextTrack;
+    session.positionMs = 0;
+    session.positionTimestamp = Date.now();
+    session.isPlaying = true;
+    session.epoch++;
+    session.sequence = 0;
+    session.lastActivity = Date.now();
+
+    broadcastToSession(session, {
+      type: "stateSync",
+      data: sessionSnapshot(session),
+      epoch: session.epoch,
+      seq: session.sequence,
+      timestamp: Date.now(),
+    });
+
+    scheduleAdvancement(session);
+  } else {
+    // Queue empty — station goes idle, keep currentTrack for "last played" context
+    session.isPlaying = false;
+    session.lastActivity = Date.now();
+
+    broadcastToSession(session, {
+      type: "stateSync",
+      data: sessionSnapshot(session),
+      epoch: session.epoch,
+      seq: ++session.sequence,
+      timestamp: Date.now(),
+    });
+  }
+}
+
 function destroySession(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) return;
+  clearAdvancement(session);
+  if (session.destroyTimeout) {
+    clearTimeout(session.destroyTimeout);
+    session.destroyTimeout = null;
+  }
   codeIndex.delete(session.joinCode);
   sessions.delete(sessionId);
 }
@@ -629,7 +722,15 @@ setInterval(() => {
     }
 
     if (session.members.size === 0) {
-      destroySession(sessionId);
+      if (session.queue.length > 0 || session.isPlaying) {
+        if (!session.destroyTimeout) {
+          session.destroyTimeout = setTimeout(() => {
+            destroySession(sessionId);
+          }, 5 * 60 * 1000);
+        }
+      } else {
+        destroySession(sessionId);
+      }
     }
   }
 }, PING_INTERVAL_MS);

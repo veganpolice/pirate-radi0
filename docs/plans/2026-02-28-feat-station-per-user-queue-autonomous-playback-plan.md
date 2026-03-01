@@ -160,17 +160,17 @@ if (session.destroyTimeout) {
 ```
 
 **Tasks:**
-- [ ] Add `advancementTimer` and `destroyTimeout` fields to session object (`server/index.js:~40`)
-- [ ] Implement `scheduleAdvancement()`, `clearAdvancement()`, `advanceQueue()` with elapsed-time calculation and `durationMs` guard
-- [ ] Hook `scheduleAdvancement` into `playCommit` handler (`server/index.js:~380`)
-- [ ] Hook `scheduleAdvancement` into `skip` handler (`server/index.js:~430`)
-- [ ] Hook `clearAdvancement` into `pause` handler
-- [ ] Hook `scheduleAdvancement` into `resume` handler
-- [ ] Hook `clearAdvancement` into `destroySession()` and idle timeout cleanup
-- [ ] Add 5-minute grace period for memberless sessions with active queues
-- [ ] Cancel grace period when a member joins/reconnects
-- [ ] Add `advanceQueue` tests: timer fires → queue shifts → stateSync broadcast → next timer scheduled
-- [ ] Add edge case tests: queue empty → station idle, pause → timer cleared, resume → timer reset, missing durationMs → timer not set, memberless grace period
+- [x] Add `advancementTimer` and `destroyTimeout` fields to session object (`server/index.js:~40`)
+- [x] Implement `scheduleAdvancement()`, `clearAdvancement()`, `advanceQueue()` with elapsed-time calculation and `durationMs` guard
+- [x] Hook `scheduleAdvancement` into `playCommit` handler (`server/index.js:~380`)
+- [x] Hook `scheduleAdvancement` into `skip` handler (`server/index.js:~430`)
+- [x] Hook `clearAdvancement` into `pause` handler
+- [x] Hook `scheduleAdvancement` into `resume` handler
+- [x] Hook `clearAdvancement` into `destroySession()` and idle timeout cleanup
+- [x] Add 5-minute grace period for memberless sessions with active queues
+- [x] Cancel grace period when a member joins/reconnects
+- [x] Add `advanceQueue` tests: timer fires → queue shifts → stateSync broadcast → next timer scheduled
+- [x] Add edge case tests: queue empty → station idle, pause → timer cleared, resume → timer reset, missing durationMs → timer not set, memberless grace period
 
 **Success criteria:** Server advances queue on a timer without any client interaction. Single-user stations survive backgrounding for at least 5 minutes.
 
@@ -199,8 +199,8 @@ The problem is `SessionStore.handleStateSync()` at line 305-308 ALSO triggers `p
 ```
 
 **Tasks:**
-- [ ] Remove the DJ playback trigger from `SessionStore.handleStateSync()` (`SessionStore.swift:~305-308`)
-- [ ] Verify `SyncEngine.handleStateSync()` plays for all clients (it already does — `lines 413-437`)
+- [x] Remove the DJ playback trigger from `SessionStore.handleStateSync()` (`SessionStore.swift:~305-308`)
+- [x] Verify `SyncEngine.handleStateSync()` plays for all clients (it already does — `lines 413-437`)
 - [ ] Test: server timer advances queue → listener receives stateSync → Spotify plays new track at correct position
 - [ ] Test: DJ receives stateSync from server-initiated advance → plays correctly without sending duplicate PREPARE+COMMIT
 
@@ -231,8 +231,8 @@ The existing reconnection flow should already handle this. Phase 3 is verificati
 **Tasks:**
 - [ ] Integration test: background broadcaster 2+ minutes → server advances → foreground → verify correct track plays
 - [ ] Verify SPTAppRemote reconnection on foreground (apply wake pattern if needed)
-- [ ] Add "Your station ran out of music" toast when broadcaster returns to an idle station (queue empty)
-- [ ] Add Spotify Premium guard in `play()` — show toast if SPTAppRemote fails with a permissions error
+- [x] Add "Your station ran out of music" toast when broadcaster returns to an idle station (queue empty)
+- [x] Add Spotify Premium guard in `play()` — show toast if SPTAppRemote fails with a permissions error
 
 **Success criteria:** Broadcaster can background for 5+ minutes, return, and seamlessly resume with the correct track playing.
 
