@@ -14,13 +14,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// Handle deep link callbacks (pirate-radio://auth/callback).
+    /// Returns false for non-auth URLs so SwiftUI's .onOpenURL can handle them.
     func application(
         _ app: UIApplication,
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
-        authManager?.handleAppRemoteURL(url)
-        return true
+        if url.host == "auth" {
+            authManager?.handleAppRemoteURL(url)
+            return true
+        }
+        return false
     }
 
     /// Configure audio session for background execution.

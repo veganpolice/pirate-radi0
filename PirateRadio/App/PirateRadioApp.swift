@@ -8,6 +8,7 @@ struct PirateRadioApp: App {
     @State private var sessionStore: SessionStore?
     @State private var toastManager = ToastManager()
     @State private var mockTimerManager = MockTimerManager()
+    @State private var pendingJoinCode: String?
 
     /// Set to true to bypass Spotify auth and explore the UI with mock data.
     static let demoMode = false
@@ -38,6 +39,10 @@ struct PirateRadioApp: App {
                         let store = SessionStore(authManager: authManager)
                         store.toastManager = toastManager
                         sessionStore = store
+                        if let code = pendingJoinCode {
+                            pendingJoinCode = nil
+                            Task { await store.joinSession(code: code) }
+                        }
                     } else if !isAuth {
                         sessionStore = nil
                     }
@@ -50,6 +55,16 @@ struct PirateRadioApp: App {
                 }
                 .onChange(of: mockTimerManager.lastEvent) { _, event in
                     handleMockEvent(event)
+                }
+                .onOpenURL { url in
+                    guard url.scheme == "pirate-radio", url.host == "join" else { return }
+                    let code = url.lastPathComponent
+                    guard !code.isEmpty, code != "/" else { return }
+                    if let sessionStore {
+                        Task { await sessionStore.joinSession(code: code) }
+                    } else {
+                        pendingJoinCode = code
+                    }
                 }
                 .environment(authManager)
                 .environment(toastManager)

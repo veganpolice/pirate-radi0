@@ -141,18 +141,6 @@ enum MockData {
         return q
     }
 
-    // MARK: - Pending Requests (for DJ inbox)
-
-    static var pendingRequests: [Track] {
-        var reqs = Array(tracks[10...14])
-        reqs[0].requestedBy = "Shredder"
-        reqs[1].requestedBy = "Avalanche"
-        reqs[2].requestedBy = "Mogul Queen"
-        reqs[3].requestedBy = "Fresh Tracks"
-        reqs[4].requestedBy = "Black Diamond"
-        return reqs
-    }
-
     // MARK: - Session Stats (for recap)
 
     struct SessionStats {
