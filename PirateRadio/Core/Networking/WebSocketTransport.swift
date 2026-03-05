@@ -350,6 +350,20 @@ actor WebSocketTransport: SessionTransport {
                 "nonce": nonce,
             ] as [String: Any]
 
+        case .batchAddToQueue(let tracks, let nonce):
+            result["type"] = "batchAddToQueue"
+            result["data"] = [
+                "tracks": tracks.map { track in
+                    [
+                        "id": track.id, "name": track.name, "artist": track.artist,
+                        "albumName": track.albumName,
+                        "albumArtURL": track.albumArtURL?.absoluteString ?? "",
+                        "durationMs": track.durationMs,
+                    ] as [String: Any]
+                },
+                "nonce": nonce,
+            ] as [String: Any]
+
         case .driftReport(let trackID, let positionMs, let ntpTimestamp):
             result["type"] = "driftReport"
             result["data"] = ["trackId": trackID, "positionMs": positionMs, "ntpTimestamp": ntpTimestamp]

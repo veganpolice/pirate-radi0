@@ -18,7 +18,7 @@ final class ToastManager {
 
     enum ToastType {
         case memberJoined, memberLeft, songRequest, djChanged
-        case modeChanged, requestAccepted, requestDeclined
+        case modeChanged
         case voteCast, signalLost, reconnected, voiceClip, comingSoon
         case queueEmpty, spotifyError
     }
@@ -61,8 +61,6 @@ final class ToastManager {
         case .songRequest: "music.note.list"
         case .djChanged: "crown.fill"
         case .modeChanged: "slider.horizontal.3"
-        case .requestAccepted: "checkmark.circle.fill"
-        case .requestDeclined: "xmark.circle.fill"
         case .voteCast: "hand.thumbsup.fill"
         case .signalLost: "antenna.radiowaves.left.and.right.slash"
         case .reconnected: "antenna.radiowaves.left.and.right"
@@ -75,9 +73,9 @@ final class ToastManager {
 
     private func color(for type: ToastType) -> Color {
         switch type {
-        case .memberJoined, .reconnected, .requestAccepted: PirateTheme.signal
+        case .memberJoined, .reconnected: PirateTheme.signal
         case .djChanged, .modeChanged, .voteCast: PirateTheme.broadcast
-        case .songRequest, .signalLost, .memberLeft, .requestDeclined: PirateTheme.flare
+        case .songRequest, .signalLost, .memberLeft: PirateTheme.flare
         case .voiceClip: PirateTheme.signal
         case .comingSoon: PirateTheme.flare
         case .queueEmpty: PirateTheme.broadcast

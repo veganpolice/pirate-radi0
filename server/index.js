@@ -543,6 +543,42 @@ function handleMessage(session, senderId, msg) {
       break;
     }
 
+    case "batchAddToQueue": {
+      if (senderId !== session.djUserId) return;
+      const { tracks, nonce } = msg.data || {};
+      if (!Array.isArray(tracks) || tracks.length === 0) break;
+      if (!nonce || typeof nonce !== "string") break;
+      // Idempotency: same pattern as addToQueue
+      if (session.queue.some((t) => t.nonce === nonce)) break;
+
+      const available = MAX_QUEUE_SIZE - session.queue.length;
+      for (const track of tracks.slice(0, available)) {
+        const durationMs = Number(track.durationMs);
+        if (!Number.isFinite(durationMs) || durationMs <= 0) continue;
+        if (durationMs > MAX_TRACK_DURATION_MS) continue;
+        session.queue.push({
+          id: String(track.id || "").slice(0, 64),
+          name: String(track.name || "").slice(0, 256),
+          artist: String(track.artist || "").slice(0, 256),
+          albumName: String(track.albumName || "").slice(0, 256),
+          albumArtURL: String(track.albumArtURL || "").slice(0, 512),
+          durationMs,
+          addedBy: senderId,
+          nonce,
+        });
+      }
+      session.sequence++;
+
+      broadcastToSession(session, {
+        type: "queueUpdate",
+        data: { queue: session.queue },
+        epoch: session.epoch,
+        seq: session.sequence,
+        timestamp: Date.now(),
+      });
+      break;
+    }
+
     case "removeFromQueue": {
       if (senderId !== session.djUserId) return;
       if (!msg.data?.trackId) return;

@@ -89,6 +89,60 @@ actor SpotifyClient {
         )
     }
 
+    // MARK: - Playlists
+
+    func getUserPlaylists(limit: Int = 20) async throws -> [SpotifyPlaylist] {
+        let token = try await authManager.getAccessToken()
+        var components = URLComponents(string: "https://api.spotify.com/v1/me/playlists")!
+        components.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+
+        let result = try JSONDecoder().decode(PlaylistsResponse.self, from: data)
+        return result.items.map { item in
+            SpotifyPlaylist(
+                id: item.id,
+                name: item.name,
+                imageURL: item.images.last?.url,
+                trackCount: item.tracks.total
+            )
+        }
+    }
+
+    func getPlaylistTracks(playlistId: String, limit: Int = 100) async throws -> [Track] {
+        let token = try await authManager.getAccessToken()
+        var components = URLComponents(string: "https://api.spotify.com/v1/playlists/\(playlistId)/tracks")!
+        components.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+
+        let result = try JSONDecoder().decode(PlaylistTracksResponse.self, from: data)
+        return result.items.compactMap { item -> Track? in
+            guard !item.isLocal, let spotifyTrack = item.track else { return nil }
+            guard spotifyTrack.durationMs > 0 else { return nil }
+            return Track(
+                id: spotifyTrack.id,
+                name: spotifyTrack.name,
+                artist: spotifyTrack.artists.first?.name ?? "Unknown",
+                albumName: spotifyTrack.album.name,
+                albumArtURL: spotifyTrack.album.images.first.flatMap { URL(string: $0.url) },
+                durationMs: spotifyTrack.durationMs
+            )
+        }
+    }
+
     // MARK: - Helpers
 
     private func validateResponse(_ response: URLResponse) throws {
@@ -145,4 +199,43 @@ private struct SpotifyImage: Codable {
     let url: String
     let width: Int?
     let height: Int?
+}
+
+// MARK: - Playlist Response Models
+
+private struct PlaylistsResponse: Codable {
+    let items: [PlaylistItem]
+}
+
+private struct PlaylistItem: Codable {
+    let id: String
+    let name: String
+    let images: [SpotifyImage]
+    let tracks: PlaylistTracksRef
+
+    struct PlaylistTracksRef: Codable {
+        let total: Int
+    }
+}
+
+private struct PlaylistTracksResponse: Codable {
+    let items: [PlaylistTrackItem]
+}
+
+private struct PlaylistTrackItem: Codable {
+    let track: SpotifyTrack?
+    let isLocal: Bool
+    enum CodingKeys: String, CodingKey {
+        case track
+        case isLocal = "is_local"
+    }
+}
+
+// MARK: - Public Playlist Model
+
+struct SpotifyPlaylist: Identifiable {
+    let id: String
+    let name: String
+    let imageURL: String?
+    let trackCount: Int
 }

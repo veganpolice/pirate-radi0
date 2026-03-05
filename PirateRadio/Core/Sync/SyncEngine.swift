@@ -191,6 +191,18 @@ actor SyncEngine {
         try? await transport.send(msg)
     }
 
+    func sendBatchAddToQueue(tracks: [Track]) async {
+        let nonce = UUID().uuidString
+        let msg = SyncMessage(
+            id: UUID(),
+            type: .batchAddToQueue(tracks: tracks, nonce: nonce),
+            sequenceNumber: 0,
+            epoch: currentEpoch,
+            timestamp: clock.now()
+        )
+        try? await transport.send(msg)
+    }
+
     func sendSkip() async {
         let msg = SyncMessage(
             id: UUID(),
@@ -260,6 +272,10 @@ actor SyncEngine {
             break
 
         case .addToQueue:
+            // Client-originated; server handles and broadcasts queueUpdate
+            break
+
+        case .batchAddToQueue:
             // Client-originated; server handles and broadcasts queueUpdate
             break
 
