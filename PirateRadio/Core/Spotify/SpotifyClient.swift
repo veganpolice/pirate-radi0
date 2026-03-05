@@ -109,7 +109,7 @@ actor SpotifyClient {
             SpotifyPlaylist(
                 id: item.id,
                 name: item.name,
-                imageURL: item.images.first?.url,
+                imageURL: item.images.last?.url,
                 trackCount: item.tracks.total
             )
         }

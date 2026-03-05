@@ -233,7 +233,7 @@ struct CreateSessionView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
         } else {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 ForEach(playlists) { playlist in
                     HStack(spacing: 12) {
                         AsyncImage(url: URL(string: playlist.imageURL ?? "")) { image in
@@ -323,7 +323,7 @@ struct CreateSessionView: View {
             // Play the first track
             await sessionStore.play(track: tracks[0])
             // Verify play succeeded before batch enqueue (prevents orphan queue)
-            guard sessionStore.session?.currentTrack != nil else { return }
+            guard sessionStore.session?.isPlaying == true else { return }
             // Batch-enqueue the rest
             if tracks.count > 1 {
                 await sessionStore.batchAddToQueue(tracks: Array(tracks[1...]))
