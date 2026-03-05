@@ -59,11 +59,7 @@ actor SpotifyPlayer: MusicSource {
     private var expectedTrackID: String?
 
     /// When the last play command was issued (for debouncing mismatch detection).
-    private var lastPlayCommandTime: ContinuousClock.Instant = .now
-
-    /// Bridge for receiving SPTAppRemotePlayerStateDelegate callbacks.
-    /// Set after init via `makeStateBridge()` because actors can't pass `self` during init.
-    nonisolated(unsafe) private(set) var stateBridge: PlayerStateBridge?
+    private var lastPlayCommandTime: ContinuousClock.Instant = .now - .seconds(10)
 
     func setOnTrackEnded(_ handler: @escaping () -> Void) {
         onTrackEnded = handler
@@ -85,13 +81,6 @@ actor SpotifyPlayer: MusicSource {
         self.playbackStateStream = stream
         self.playbackContinuation = continuation
         self.appRemote = appRemote
-    }
-
-    /// Create and return the delegate bridge. Must be called after init.
-    func makeStateBridge() -> PlayerStateBridge {
-        let bridge = PlayerStateBridge(player: self)
-        self.stateBridge = bridge
-        return bridge
     }
 
     // MARK: - MusicSource Protocol
