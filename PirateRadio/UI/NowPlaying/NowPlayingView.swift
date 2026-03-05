@@ -123,20 +123,8 @@ struct NowPlayingView: View {
                     trackHeader
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 } else if sessionStore.isCreator || sessionStore.isDJ {
-                    VStack(spacing: 16) {
-                        Image(systemName: "waveform.badge.plus")
-                            .font(.system(size: 48))
-                            .foregroundStyle(PirateTheme.broadcast.opacity(0.6))
-                        Text("You're on air")
-                            .font(PirateTheme.display(20))
-                            .foregroundStyle(PirateTheme.broadcast)
-                        Text("Add tracks to start playing")
-                            .font(PirateTheme.body(14))
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
-                    .transition(.opacity)
+                    PlaylistBrowser(sessionStore: sessionStore)
+                        .transition(.opacity)
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "antenna.radiowaves.left.and.right")
@@ -431,6 +419,117 @@ struct NowPlayingView: View {
             },
         ]
         actions.randomElement()?()
+    }
+}
+
+// MARK: - Playlist Browser
+
+/// Shows user's Spotify playlists in the DJ empty state.
+/// Tapping a playlist plays the first track and batch-enqueues the rest.
+struct PlaylistBrowser: View {
+    let sessionStore: SessionStore
+    @Environment(SpotifyAuthManager.self) private var authManager
+
+    @State private var playlists: [SpotifyPlaylist] = []
+    @State private var isLoadingPlaylist = false
+    @State private var spotifyClient: SpotifyClient?
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "waveform.badge.plus")
+                .font(.system(size: 48))
+                .foregroundStyle(PirateTheme.broadcast.opacity(0.6))
+            Text("You're on air")
+                .font(PirateTheme.display(20))
+                .foregroundStyle(PirateTheme.broadcast)
+
+            if playlists.isEmpty && !isLoadingPlaylist {
+                Text("Add tracks to start playing")
+                    .font(PirateTheme.body(14))
+                    .foregroundStyle(.white.opacity(0.4))
+            } else if isLoadingPlaylist {
+                ProgressView()
+                    .tint(PirateTheme.signal)
+                    .padding(.top, 8)
+            } else {
+                Text("PICK A PLAYLIST")
+                    .font(PirateTheme.body(11))
+                    .foregroundStyle(PirateTheme.signal.opacity(0.6))
+                    .padding(.top, 4)
+
+                LazyVStack(spacing: 0) {
+                    ForEach(playlists) { playlist in
+                        HStack(spacing: 12) {
+                            AsyncImage(url: URL(string: playlist.imageURL ?? "")) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(PirateTheme.signal.opacity(0.1))
+                            }
+                            .frame(width: 48, height: 48)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(playlist.name)
+                                    .font(PirateTheme.body(14))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                Text("\(playlist.trackCount) tracks")
+                                    .font(PirateTheme.body(12))
+                                    .foregroundStyle(.white.opacity(0.5))
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "play.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(PirateTheme.broadcast)
+                        }
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            guard !isLoadingPlaylist else { return }
+                            isLoadingPlaylist = true
+                            Task {
+                                await playPlaylist(playlist)
+                                isLoadingPlaylist = false
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .task {
+            guard playlists.isEmpty else { return }
+            spotifyClient = SpotifyClient(authManager: authManager)
+            do {
+                playlists = try await spotifyClient?.getUserPlaylists() ?? []
+            } catch {
+                print("[PlaylistBrowser] Failed to load playlists: \(error)")
+            }
+        }
+    }
+
+    private func playPlaylist(_ playlist: SpotifyPlaylist) async {
+        guard let client = spotifyClient else { return }
+        do {
+            let tracks = try await client.getPlaylistTracks(playlistId: playlist.id)
+            guard !tracks.isEmpty else {
+                sessionStore.toastManager?.show(.queueEmpty, message: "This playlist is empty")
+                return
+            }
+            await sessionStore.play(track: tracks[0])
+            guard sessionStore.session?.isPlaying == true else { return }
+            if tracks.count > 1 {
+                await sessionStore.batchAddToQueue(tracks: Array(tracks[1...]))
+                sessionStore.toastManager?.show(.songRequest, message: "Added \(tracks.count - 1) tracks from '\(playlist.name)'")
+            }
+        } catch {
+            print("[PlaylistBrowser] Failed to play playlist: \(error)")
+            sessionStore.toastManager?.show(.spotifyError, message: "Couldn't load playlist")
+        }
     }
 }
 
