@@ -4,6 +4,21 @@ import os
 
 private let logger = Logger(subsystem: "com.pirateradio", category: "SpotifyPlayer")
 
+/// Bridge class that conforms to SPTAppRemotePlayerStateDelegate on behalf of
+/// the SpotifyPlayer actor. Required because actors cannot directly conform
+/// to ObjC protocols called from arbitrary threads.
+final class PlayerStateBridge: NSObject, SPTAppRemotePlayerStateDelegate {
+    private let player: SpotifyPlayer
+
+    init(player: SpotifyPlayer) {
+        self.player = player
+    }
+
+    nonisolated func playerStateDidChange(_ playerState: SPTAppRemotePlayerState) {
+        Task { await player.handlePlayerStateChange(playerState) }
+    }
+}
+
 /// State machine wrapper around the SpotifyiOS App Remote SDK.
 ///
 /// The Spotify SDK has unpredictable callback timing (50ms-2s+).
@@ -37,8 +52,25 @@ actor SpotifyPlayer: MusicSource {
     /// Called when a track reaches its end (paused near duration).
     private var onTrackEnded: (() -> Void)?
 
+    /// Called when Spotify is playing a different track than expected.
+    private var onTrackMismatch: (() -> Void)?
+
+    /// The track ID we expect Spotify to be playing (set on play, cleared on stop).
+    private var expectedTrackID: String?
+
+    /// When the last play command was issued (for debouncing mismatch detection).
+    private var lastPlayCommandTime: ContinuousClock.Instant = .now
+
+    /// Bridge for receiving SPTAppRemotePlayerStateDelegate callbacks.
+    /// Set after init via `makeStateBridge()` because actors can't pass `self` during init.
+    nonisolated(unsafe) private(set) var stateBridge: PlayerStateBridge?
+
     func setOnTrackEnded(_ handler: @escaping () -> Void) {
         onTrackEnded = handler
+    }
+
+    func setOnTrackMismatch(_ handler: @escaping () -> Void) {
+        onTrackMismatch = handler
     }
 
     /// Average measured latency from play() call to actual playback start.
@@ -53,9 +85,13 @@ actor SpotifyPlayer: MusicSource {
         self.playbackStateStream = stream
         self.playbackContinuation = continuation
         self.appRemote = appRemote
+    }
 
-        // Subscribe to player state changes once connected
-        Task { await self.subscribeToPlayerState() }
+    /// Create and return the delegate bridge. Must be called after init.
+    func makeStateBridge() -> PlayerStateBridge {
+        let bridge = PlayerStateBridge(player: self)
+        self.stateBridge = bridge
+        return bridge
     }
 
     // MARK: - MusicSource Protocol
@@ -151,6 +187,8 @@ actor SpotifyPlayer: MusicSource {
         // Extract track ID from URI like "spotify:track:abc123"
         let trackID = trackURI.components(separatedBy: ":").last ?? trackURI
 
+        logger.debug("playerStateDidChange: track=\(trackID), paused=\(playerState.isPaused), pos=\(playerState.playbackPosition)ms")
+
         if case .waitingForCallback(let expected, _) = state, expected == trackID {
             didStartPlayback(trackID: trackID)
         }
@@ -167,6 +205,17 @@ actor SpotifyPlayer: MusicSource {
            playerState.playbackPosition >= Int(playerState.track.duration) - 1000 {
             onTrackEnded?()
         }
+
+        // Detect track mismatch: Spotify playing a different track than expected
+        if let expected = expectedTrackID,
+           trackID != expected,
+           !playerState.isPaused {
+            let timeSinceLastPlay = ContinuousClock.now - lastPlayCommandTime
+            if timeSinceLastPlay > .seconds(3) {
+                logger.notice("Track mismatch: expected=\(expected), actual=\(trackID)")
+                onTrackMismatch?()
+            }
+        }
     }
 
     // MARK: - Private
@@ -180,6 +229,8 @@ actor SpotifyPlayer: MusicSource {
 
     private func beginPlayback(trackID: String, position: Duration) async throws {
         state = .preparing(trackID)
+        expectedTrackID = trackID
+        lastPlayCommandTime = .now
 
         let uri = "spotify:track:\(trackID)"
         let positionMs = Int(position.components.seconds * 1000 + position.components.attoseconds / 1_000_000_000_000_000)
@@ -215,24 +266,6 @@ actor SpotifyPlayer: MusicSource {
             case .play(let trackID, let position):
                 try? await beginPlayback(trackID: trackID, position: position)
             }
-        }
-    }
-
-    private func subscribeToPlayerState() {
-        // Wait briefly for connection to establish
-        Task {
-            try? await Task.sleep(for: .seconds(1))
-            guard appRemote.isConnected else {
-                logger.info("App Remote not connected, skipping player state subscription")
-                return
-            }
-            appRemote.playerAPI?.subscribe(toPlayerState: { _, error in
-                if let error {
-                    logger.error("Failed to subscribe to player state: \(error.localizedDescription)")
-                } else {
-                    logger.notice("Subscribed to Spotify player state changes")
-                }
-            })
         }
     }
 

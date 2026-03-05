@@ -124,6 +124,7 @@ final class SessionStore {
         session = nil
         isCreator = false
         connectionState = .disconnected
+        authManager.onAppRemoteConnected = nil
     }
 
     // MARK: - Dial Home Actions
@@ -316,6 +317,10 @@ final class SessionStore {
         await syncEngine?.sendAddToQueue(track: track)
     }
 
+    func batchAddToQueue(tracks: [Track]) async {
+        await syncEngine?.sendBatchAddToQueue(tracks: tracks)
+    }
+
     func skipToNext() async {
         guard isDJ else { return }
         guard session?.queue.isEmpty == false else { return }
@@ -329,9 +334,11 @@ final class SessionStore {
         let clock = KronosClock()
         let player = SpotifyPlayer(appRemote: authManager.appRemote)
 
-        await player.setOnTrackEnded { [weak self] in
+        // Wire mismatch detection: when Spotify plays a different track than expected,
+        // reassert the station's playback.
+        await player.setOnTrackMismatch { [weak self] in
             Task { @MainActor in
-                await self?.skipToNext()
+                await self?.reassertPlayback()
             }
         }
 
@@ -344,8 +351,47 @@ final class SessionStore {
             }
         }
 
+        // Wire AppRemote reconnection: re-subscribe to player state and reassert playback
+        // on every connection (initial + reconnects after background).
+        let bridge = await player.makeStateBridge()
+        authManager.onAppRemoteConnected = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.handleAppRemoteReconnected(bridge: bridge)
+            }
+        }
+
         try await engine.start(sessionID: sessionID, token: token)
         self.syncEngine = engine
+
+        // If AppRemote is already connected, wire up immediately
+        if authManager.isConnectedToSpotifyApp {
+            await handleAppRemoteReconnected(bridge: bridge)
+        }
+    }
+
+    /// Called on every AppRemote connection (initial + reconnects).
+    /// Re-subscribes to player state and reasserts station playback.
+    private func handleAppRemoteReconnected(bridge: PlayerStateBridge) async {
+        print("[SessionStore] AppRemote reconnected — re-subscribing to player state")
+        authManager.appRemote.playerAPI?.delegate = bridge
+        authManager.appRemote.playerAPI?.subscribe(toPlayerState: { _, error in
+            if let error {
+                print("[SessionStore] playerState subscribe failed: \(error.localizedDescription)")
+            } else {
+                print("[SessionStore] Subscribed to Spotify player state changes")
+            }
+        })
+        await reassertPlayback()
+    }
+
+    /// Force Spotify back to the station's current track at the correct position.
+    private func reassertPlayback() async {
+        guard let session, session.isPlaying,
+              session.currentTrack != nil else { return }
+        print("[SessionStore] Reasserting station playback")
+        toastManager?.show(.reconnected, message: "Tuning back to station...")
+        await syncEngine?.retryCatchUpPlayback()
     }
 
     private func handleUpdate(_ update: SyncEngine.SessionUpdate) {
