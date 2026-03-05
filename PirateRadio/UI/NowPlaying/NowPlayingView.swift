@@ -523,7 +523,9 @@ struct PlaylistBrowser: View {
             await sessionStore.play(track: tracks[0])
             guard sessionStore.session?.isPlaying == true else { return }
             if tracks.count > 1 {
-                await sessionStore.batchAddToQueue(tracks: Array(tracks[1...]))
+                for track in tracks[1...] {
+                    await sessionStore.addToQueue(track: track)
+                }
                 sessionStore.toastManager?.show(.songRequest, message: "Added \(tracks.count - 1) tracks from '\(playlist.name)'")
             }
         } catch {
