@@ -25,31 +25,15 @@ struct FrequencyDial: View {
     private let endAngle: Double = 135
     private let tickCount = 20
 
-    // FM band range for frequency-to-dial mapping
-    private let fmMin: Double = 88.0
-    private let fmMax: Double = 108.0
-
     /// Detents used for rendering — derived from stations when in station mode.
     private var effectiveDetents: [Double] {
         if stations.isEmpty { return detents }
-        return stations.map { frequencyToDialValue($0.frequency) }
+        return stations.map(\.dialValue)
     }
 
     /// The station closest to the current dial position (if in station mode).
     private var snappedStation: Station? {
-        guard !stations.isEmpty else { return nil }
-        let dialValue = value
-        var closest: Station?
-        var closestDist = Double.infinity
-        for station in stations {
-            let stationValue = frequencyToDialValue(station.frequency)
-            let dist = abs(dialValue - stationValue)
-            if dist < closestDist && dist < 0.08 {
-                closestDist = dist
-                closest = station
-            }
-        }
-        return closest
+        Station.snapped(from: stations, at: value)
     }
 
     var body: some View {
@@ -75,7 +59,7 @@ struct FrequencyDial: View {
                 // Station notch markers (glow dots at each station's position)
                 if !stations.isEmpty {
                     ForEach(stations) { station in
-                        let dialPos = frequencyToDialValue(station.frequency)
+                        let dialPos = station.dialValue
                         let angle = Angle.degrees(startAngle + dialPos * (endAngle - startAngle))
                         stationNotch(angle: angle, radius: radius, station: station, size: size)
                     }
@@ -213,15 +197,11 @@ struct FrequencyDial: View {
 
                 // In station mode, also fire onTuneToStation
                 if !stations.isEmpty {
-                    if let station = stations.first(where: { abs(frequencyToDialValue($0.frequency) - detent) < 0.01 }) {
+                    if let station = stations.first(where: { abs($0.dialValue - detent) < 0.01 }) {
                         onTuneToStation?(station)
                     }
                 }
             }
         }
-    }
-
-    private func frequencyToDialValue(_ frequency: Double) -> Double {
-        (frequency - fmMin) / (fmMax - fmMin)
     }
 }

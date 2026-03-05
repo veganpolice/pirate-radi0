@@ -8,6 +8,8 @@ struct DialHomeView: View {
     @State private var dialValue: Double = 0.5
 
     var body: some View {
+        let snapped = Station.snapped(from: sessionStore.stations, at: dialValue)
+
         ZStack {
             PirateTheme.void.ignoresSafeArea()
 
@@ -16,6 +18,22 @@ struct DialHomeView: View {
 
                 // Tuning header
                 tuningHeader
+
+                // "Join Station" button
+                Button {
+                    if let station = snapped {
+                        sessionStore.tuneToStation(station)
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "radio")
+                        Text("Join Station")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
+                .padding(.horizontal, 24)
+                .disabled(snapped == nil)
 
                 // The dial with live station notches
                 FrequencyDial(
@@ -27,6 +45,8 @@ struct DialHomeView: View {
                     }
                 )
                 .padding(.horizontal, 24)
+
+                Spacer()
 
                 // "Start Broadcasting" button
                 Button {
