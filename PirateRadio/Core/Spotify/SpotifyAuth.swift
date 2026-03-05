@@ -24,8 +24,6 @@ final class SpotifyAuthManager: NSObject {
         "user-top-read",
         "streaming",
         "app-remote-control",
-        "playlist-read-private",
-        "playlist-read-collaborative",
     ].joined(separator: " ")
 
     // MARK: - App Remote
@@ -287,6 +285,23 @@ final class SpotifyAuthManager: NSObject {
         appRemote.connectionParameters.accessToken = token
         // authorizeAndPlayURI opens Spotify app; empty string = don't auto-play
         appRemote.authorizeAndPlayURI("")
+    }
+
+    /// Subscribe to Spotify player state changes with the given delegate bridge.
+    func subscribeToPlayerState(delegate: SPTAppRemotePlayerStateDelegate) {
+        appRemote.playerAPI?.delegate = delegate
+        appRemote.playerAPI?.subscribe(toPlayerState: { _, error in
+            if let error {
+                logger.error("playerState subscribe failed: \(error.localizedDescription)")
+            } else {
+                logger.notice("Subscribed to Spotify player state changes")
+            }
+        })
+    }
+
+    /// Clear the player state delegate (call when leaving a session).
+    func unsubscribeFromPlayerState() {
+        appRemote.playerAPI?.delegate = nil
     }
 
     /// Disconnect from the Spotify app (call when entering background).

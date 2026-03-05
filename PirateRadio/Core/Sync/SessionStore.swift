@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.pirateradio", category: "SessionStore")
 
 /// Single source of truth for the current session state.
 /// ViewModels project slices of this store; the SyncEngine writes to it.
@@ -32,6 +35,10 @@ final class SessionStore {
     private let authManager: SpotifyAuthManager
     private let baseURL: URL
     var toastManager: ToastManager?
+
+    /// Cooldown to prevent reassertPlayback from triple-firing on reconnect.
+    private var lastReassertTime: ContinuousClock.Instant = .now - .seconds(10)
+    private let reassertCooldown: Duration = .seconds(2)
 
     // MARK: - Init
 
@@ -125,6 +132,7 @@ final class SessionStore {
         isCreator = false
         connectionState = .disconnected
         authManager.onAppRemoteConnected = nil
+        authManager.unsubscribeFromPlayerState()
     }
 
     // MARK: - Dial Home Actions
@@ -317,10 +325,6 @@ final class SessionStore {
         await syncEngine?.sendAddToQueue(track: track)
     }
 
-    func batchAddToQueue(tracks: [Track]) async {
-        await syncEngine?.sendBatchAddToQueue(tracks: tracks)
-    }
-
     func skipToNext() async {
         guard isDJ else { return }
         guard session?.queue.isEmpty == false else { return }
@@ -353,7 +357,7 @@ final class SessionStore {
 
         // Wire AppRemote reconnection: re-subscribe to player state and reassert playback
         // on every connection (initial + reconnects after background).
-        let bridge = await player.makeStateBridge()
+        let bridge = PlayerStateBridge(player: player)
         authManager.onAppRemoteConnected = { [weak self] in
             guard let self else { return }
             Task { @MainActor in
@@ -373,23 +377,23 @@ final class SessionStore {
     /// Called on every AppRemote connection (initial + reconnects).
     /// Re-subscribes to player state and reasserts station playback.
     private func handleAppRemoteReconnected(bridge: PlayerStateBridge) async {
-        print("[SessionStore] AppRemote reconnected — re-subscribing to player state")
-        authManager.appRemote.playerAPI?.delegate = bridge
-        authManager.appRemote.playerAPI?.subscribe(toPlayerState: { _, error in
-            if let error {
-                print("[SessionStore] playerState subscribe failed: \(error.localizedDescription)")
-            } else {
-                print("[SessionStore] Subscribed to Spotify player state changes")
-            }
-        })
+        logger.notice("AppRemote reconnected — re-subscribing to player state")
+        authManager.subscribeToPlayerState(delegate: bridge)
         await reassertPlayback()
     }
 
     /// Force Spotify back to the station's current track at the correct position.
+    /// Cooldown prevents triple-fire when reconnect + stateSync + mismatch all trigger at once.
     private func reassertPlayback() async {
+        let now = ContinuousClock.now
+        guard now - lastReassertTime > reassertCooldown else {
+            logger.debug("Reassert skipped — cooldown active")
+            return
+        }
         guard let session, session.isPlaying,
               session.currentTrack != nil else { return }
-        print("[SessionStore] Reasserting station playback")
+        lastReassertTime = now
+        logger.notice("Reasserting station playback")
         toastManager?.show(.reconnected, message: "Tuning back to station...")
         await syncEngine?.retryCatchUpPlayback()
     }
