@@ -42,8 +42,8 @@ class MessageComposeHostController: UIViewController, MFMessageComposeViewContro
         _ controller: MFMessageComposeViewController,
         didFinishWith result: MessageComposeResult
     ) {
-        controller.dismiss(animated: true) {
-            self.onFinished()
+        controller.dismiss(animated: true) { [weak self] in
+            self?.onFinished()
         }
     }
 }

@@ -316,6 +316,10 @@ final class SessionStore {
         await syncEngine?.sendAddToQueue(track: track)
     }
 
+    func batchAddToQueue(tracks: [Track]) async {
+        await syncEngine?.sendBatchAddToQueue(tracks: tracks)
+    }
+
     func skipToNext() async {
         guard isDJ else { return }
         guard session?.queue.isEmpty == false else { return }
