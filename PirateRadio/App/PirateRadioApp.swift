@@ -133,13 +133,8 @@ struct SessionRootView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let session = sessionStore.session {
-                    if session.currentTrack != nil || !sessionStore.isCreator {
-                        // Show player if track is playing OR if we joined someone else's session
-                        NowPlayingView()
-                    } else {
-                        CreateSessionView()
-                    }
+                if sessionStore.session != nil {
+                    NowPlayingView()
                 } else {
                     DialHomeView()
                 }
