@@ -543,6 +543,33 @@ function handleMessage(session, senderId, msg) {
       break;
     }
 
+    case "batchAddToQueue": {
+      const { tracks, nonce } = msg.data || {};
+      if (!Array.isArray(tracks) || tracks.length === 0) break;
+      // Idempotency: same pattern as addToQueue
+      if (session.queue.some((t) => t.nonce === nonce)) {
+        ws.send(JSON.stringify({ type: "queueUpdate", data: { queue: session.queue } }));
+        break;
+      }
+
+      const available = MAX_QUEUE_SIZE - session.queue.length;
+      for (const track of tracks.slice(0, available)) {
+        const durationMs = Number(track.durationMs);
+        if (!Number.isFinite(durationMs) || durationMs <= 0) continue;
+        session.queue.push({ ...track, durationMs, addedBy: senderId, nonce });
+      }
+      session.sequence++;
+
+      broadcastToSession(session, {
+        type: "queueUpdate",
+        data: { queue: session.queue },
+        epoch: session.epoch,
+        seq: session.sequence,
+        timestamp: Date.now(),
+      });
+      break;
+    }
+
     case "removeFromQueue": {
       if (senderId !== session.djUserId) return;
       if (!msg.data?.trackId) return;

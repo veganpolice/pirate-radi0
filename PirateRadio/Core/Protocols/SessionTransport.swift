@@ -27,6 +27,7 @@ struct SyncMessage: Codable, Sendable {
         case seek(positionMs: Int, atNtp: UInt64)
         case skip
         case addToQueue(track: Track, nonce: String)
+        case batchAddToQueue(tracks: [Track], nonce: String)
         case driftReport(trackID: String, positionMs: Int, ntpTimestamp: UInt64)
         case stateSync(SessionSnapshot)
         case queueUpdate([Track])
