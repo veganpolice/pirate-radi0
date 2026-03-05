@@ -1,15 +1,13 @@
-import MessageUI
 import SwiftUI
 
 /// The main now-playing screen shown during an active session.
 /// Album art, track info, progress bar, controls, crew strip,
-/// hot-seat banner, walkie-talkie megaphone, and bottom menu bar.
+/// hot-seat banner, walkie-talkie megaphone, and full-width queue button.
 struct NowPlayingView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(ToastManager.self) private var toastManager
 
     @State private var showQueue = false
-    @State private var showShareCompose = false
     @State private var showSettings = false
     @State private var showMemberProfile: Session.Member?
     @State private var showSignalLost = false
@@ -24,7 +22,10 @@ struct NowPlayingView: View {
     @State private var showControls = false
     @State private var showCrew = false
 
-    private let canShare = PirateRadioApp.demoMode || MFMessageComposeViewController.canSendText()
+    private var currentStationFrequency: Double? {
+        guard let sessionId = sessionStore.session?.id else { return nil }
+        return sessionStore.stations.first(where: { $0.sessionId == sessionId })?.frequency
+    }
 
     var body: some View {
         ZStack {
@@ -48,15 +49,6 @@ struct NowPlayingView: View {
         }
         .sheet(isPresented: $showQueue) { QueueView() }
         .sheet(isPresented: $showSettings) { SessionSettingsView() }
-        .sheet(isPresented: $showShareCompose) {
-            if let joinCode = sessionStore.session?.joinCode {
-                MessageComposeView(
-                    messageBody: "Tune in to my Pirate Radio station! Use code \(joinCode) to join. pirate-radio://join/\(joinCode)"
-                ) {
-                    showShareCompose = false
-                }
-            }
-        }
         .sheet(item: $showMemberProfile) { member in
             MemberProfileCard(member: member)
                 .presentationDetents([.medium])
@@ -64,16 +56,58 @@ struct NowPlayingView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    Task { await sessionStore.leaveSession() }
-                } label: {
-                    Image(systemName: "dial.low")
-                        .foregroundStyle(PirateTheme.signal)
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await sessionStore.leaveSession() }
+                    } label: {
+                        Image(systemName: "dial.low")
+                            .foregroundStyle(PirateTheme.signal)
+                    }
+
+                    if sessionStore.isCreator, let code = sessionStore.session?.joinCode {
+                        ShareLink(
+                            item: "Join my Pirate Radio station! Code: \(code)",
+                            subject: Text("Pirate Radio"),
+                            message: Text("Tune in with code \(code)")
+                        ) {
+                            Text(code)
+                                .font(PirateTheme.display(14))
+                                .foregroundStyle(PirateTheme.broadcast.opacity(0.7))
+                        }
+                    }
+                }
+            }
+
+            ToolbarItem(placement: .topBarLeading) {
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .foregroundStyle(PirateTheme.signal.opacity(0.6))
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                if let frequency = currentStationFrequency {
+                    Text(String(format: "%.1f", frequency))
+                        .font(PirateTheme.display(22))
+                        .foregroundStyle(PirateTheme.broadcast)
+                        .neonGlow(PirateTheme.broadcast, intensity: 0.6)
                 }
             }
         }
         .onAppear { startEntranceAnimation() }
         .onShake { handleShake() }
+        .task {
+            await sessionStore.fetchStations()
+            if currentStationFrequency == nil {
+                try? await Task.sleep(for: .seconds(2))
+                await sessionStore.fetchStations()
+            }
+        }
+        .onChange(of: sessionStore.session?.currentTrack?.id) { oldValue, newValue in
+            if oldValue == nil, newValue != nil {
+                startEntranceAnimation()
+            }
+        }
     }
 
     // MARK: - Main Content
@@ -88,6 +122,21 @@ struct NowPlayingView: View {
                 if sessionStore.session?.currentTrack != nil {
                     trackHeader
                         .transition(.move(edge: .leading).combined(with: .opacity))
+                } else if sessionStore.isCreator || sessionStore.isDJ {
+                    VStack(spacing: 16) {
+                        Image(systemName: "waveform.badge.plus")
+                            .font(.system(size: 48))
+                            .foregroundStyle(PirateTheme.broadcast.opacity(0.6))
+                        Text("You're on air")
+                            .font(PirateTheme.display(20))
+                            .foregroundStyle(PirateTheme.broadcast)
+                        Text("Add tracks to start playing")
+                            .font(PirateTheme.body(14))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .transition(.opacity)
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "antenna.radiowaves.left.and.right")
@@ -149,7 +198,7 @@ struct NowPlayingView: View {
                 .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
 
-            // Bottom menu bar
+            // Bottom bar
             bottomBar
         }
         .padding(.horizontal, 16)
@@ -158,54 +207,22 @@ struct NowPlayingView: View {
     // MARK: - Bottom Bar
 
     private var bottomBar: some View {
-        HStack(spacing: 0) {
-            // Share via iMessage
-            Button {
-                if MFMessageComposeViewController.canSendText() {
-                    showShareCompose = true
-                } else {
-                    toastManager.show(.comingSoon, message: "iMessage not available on this device")
-                }
-            } label: {
-                VStack(spacing: 3) {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.system(size: 20, weight: .medium))
-                    Text("Share")
-                        .font(PirateTheme.body(9))
-                }
-                .foregroundStyle(PirateTheme.signal.opacity(0.6))
-            }
-            .frame(maxWidth: .infinity, minHeight: 50)
-            .opacity(canShare ? 1.0 : 0.4)
-
-            // Megaphone (walkie-talkie) — bigger, central
+        HStack(spacing: 12) {
             MegaphoneButton()
-                .frame(maxWidth: .infinity, minHeight: 50)
+                .frame(width: 52, height: 52)
 
-            // Queue
             Button { showQueue = true } label: {
-                VStack(spacing: 3) {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 20, weight: .medium))
-                    Text("Queue")
-                        .font(PirateTheme.body(9))
+                HStack(spacing: 10) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                    Text(sessionStore.isDJ ? "Add to Queue" : "Request Song")
+                        .font(PirateTheme.display(16))
                 }
-                .foregroundStyle(PirateTheme.signal.opacity(0.6))
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity, minHeight: 50)
-
-            // Settings gear
-            Button { showSettings = true } label: {
-                VStack(spacing: 3) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 20, weight: .medium))
-                    Text("Settings")
-                        .font(PirateTheme.body(9))
-                }
-                .foregroundStyle(PirateTheme.signal.opacity(0.6))
-            }
-            .frame(maxWidth: .infinity, minHeight: 50)
+            .buttonStyle(GloveButtonStyle(color: PirateTheme.broadcast))
         }
+        .padding(.horizontal, 16)
         .padding(.top, 4)
         .padding(.bottom, 8)
         .background(

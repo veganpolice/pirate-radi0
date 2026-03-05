@@ -35,7 +35,7 @@ struct SessionLobbyView: View {
                 VStack(spacing: 16) {
                     Button {
                         if PirateRadioApp.demoMode {
-                            // In demo mode, clear currentTrack so CreateSessionView shows
+                            // In demo mode, clear currentTrack so NowPlayingView shows empty state
                             sessionStore.clearCurrentTrack()
                         } else {
                             Task { await sessionStore.createSession() }

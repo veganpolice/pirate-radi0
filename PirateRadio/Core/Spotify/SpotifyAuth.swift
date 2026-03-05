@@ -24,6 +24,8 @@ final class SpotifyAuthManager: NSObject {
         "user-top-read",
         "streaming",
         "app-remote-control",
+        "playlist-read-private",
+        "playlist-read-collaborative",
     ].joined(separator: " ")
 
     // MARK: - App Remote
@@ -43,6 +45,10 @@ final class SpotifyAuthManager: NSObject {
 
     /// Whether SPTAppRemote is connected to the Spotify app.
     private(set) var isConnectedToSpotifyApp = false
+
+    /// Called each time AppRemote establishes a connection (including reconnects).
+    /// SessionStore uses this to re-subscribe to player state and reassert playback.
+    var onAppRemoteConnected: (() -> Void)?
 
     // MARK: - State
 
@@ -428,6 +434,7 @@ extension SpotifyAuthManager: SPTAppRemoteDelegate {
         Task { @MainActor in
             logger.notice("SPTAppRemote connected to Spotify app")
             self.isConnectedToSpotifyApp = true
+            self.onAppRemoteConnected?()
         }
     }
 
