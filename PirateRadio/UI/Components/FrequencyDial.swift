@@ -25,18 +25,14 @@ struct FrequencyDial: View {
     private let endAngle: Double = 135
     private let tickCount = 20
 
-    /// Detents used for rendering — derived from stations when in station mode.
-    private var effectiveDetents: [Double] {
-        if stations.isEmpty { return detents }
-        return stations.map(\.dialValue)
-    }
-
     /// The station closest to the current dial position (if in station mode).
     private var snappedStation: Station? {
         Station.snapped(from: stations, at: value)
     }
 
     var body: some View {
+        let resolvedDetents = stations.isEmpty ? detents : stations.map(\.dialValue)
+
         GeometryReader { geo in
             let size = min(geo.size.width, geo.size.height)
             let radius = size / 2
@@ -51,7 +47,7 @@ struct FrequencyDial: View {
                     let fraction = Double(i) / Double(tickCount - 1)
                     let angle = Angle.degrees(startAngle + fraction * (endAngle - startAngle))
                     let isActive = fraction <= value
-                    let isMajor = effectiveDetents.contains(where: { abs($0 - fraction) < 0.03 })
+                    let isMajor = resolvedDetents.contains(where: { abs($0 - fraction) < 0.03 })
 
                     tickMark(angle: angle, radius: radius, isMajor: isMajor, isActive: isActive)
                 }
@@ -96,7 +92,7 @@ struct FrequencyDial: View {
                         let clamped = max(0, min(1, normalized))
                         value = clamped
 
-                        checkDetentSnap(clamped)
+                        checkDetentSnap(clamped, detents: resolvedDetents)
                     }
             )
             .neonGlow(color, intensity: isDragging ? 0.8 : 0.3)
@@ -114,7 +110,7 @@ struct FrequencyDial: View {
                     .font(PirateTheme.display(size * 0.08))
                     .foregroundStyle(color)
                     .lineLimit(1)
-                Text(String(format: "%.1f", station.frequency))
+                Text(String(format: "%.1f", station.frequencyDisplay))
                     .font(PirateTheme.body(size * 0.06))
                     .foregroundStyle(color.opacity(0.7))
             }
@@ -189,8 +185,8 @@ struct FrequencyDial: View {
 
     // MARK: - Helpers
 
-    private func checkDetentSnap(_ value: Double) {
-        for detent in effectiveDetents {
+    private func checkDetentSnap(_ value: Double, detents: [Double]) {
+        for detent in detents {
             if abs(value - detent) < 0.05 && lastDetent != detent {
                 lastDetent = detent
                 onDetentSnap?(detent)

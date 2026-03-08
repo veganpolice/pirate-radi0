@@ -190,30 +190,30 @@ Pre-deploy once: `fly volumes create pirate_radio_data --region sjc --size 1`
 - `PirateRadio/UI/NowPlaying/NowPlayingView.swift` — conditional DJ controls, Auto-DJ indicator
 
 **Tasks:**
-- [ ] Update `Station.swift` — add `trackCount`, `isLive`, `ownerConnected`, `listenerCount`
-- [ ] Make `djUserID` optional in `Session.swift` — handle `null` in `SyncEngine` and `SessionStore`
-- [ ] Update `fetchStations()` for new response shape
-- [ ] Create `FrequencyPickerView.swift` — dial-based picker (use `.task` for async, not `.onAppear`)
-- [ ] Wire frequency picker into onboarding flow
-- [ ] Show all stations on dial — live (glowing), idle (dimmer), empty (no tracks)
-- [ ] Show "Auto-DJ" indicator when `djUserId == null`
-- [ ] DJ controls visible only when `djUserId == currentUserId`
-- [ ] Replace "Start Broadcasting" with "Tune to My Station"
-- [ ] Auto-tune to own station on launch
-- [ ] Check generation counter after each `await` in extended tune-in flow
-- [ ] Ensure snapshot resume goes through `SyncEngine` (single playback owner)
-- [ ] Call `ensureSpotifyConnected` before playback on idle station resume
-- [ ] Update `ServerMessage` decode layer for `djUserId: null` and new station fields
-- [ ] **Cleanup:** Remove `DJMode` enum, `hotSeatSongsPerDJ`, `hotSeatSongsRemaining`
-- [ ] **Cleanup:** Remove join code UI components
+- [x] Update `Station.swift` — add `trackCount`, `isLive`, `ownerConnected`, `listenerCount`
+- [x] Make `djUserID` optional in `Session.swift` — handle `null` in `SyncEngine` and `SessionStore`
+- [x] Update `fetchStations()` for new response shape
+- [x] Create `FrequencyPickerView.swift` — dial-based picker (use `.task` for async, not `.onAppear`)
+- [x] Wire frequency picker into onboarding flow
+- [x] Show all stations on dial — live (glowing), idle (dimmer), empty (no tracks)
+- [x] Show "Auto-DJ" indicator when `djUserId == null`
+- [x] DJ controls visible only when `djUserId == currentUserId`
+- [x] Replace "Start Broadcasting" with "Tune to My Station"
+- [x] Auto-tune to own station on launch
+- [x] Check generation counter after each `await` in extended tune-in flow
+- [x] Ensure snapshot resume goes through `SyncEngine` (single playback owner)
+- [x] Call `ensureSpotifyConnected` before playback on idle station resume
+- [x] Update `ServerMessage` decode layer for `djUserId: null` and new station fields
+- [x] **Cleanup:** Remove `DJMode` enum, `hotSeatSongsPerDJ`, `hotSeatSongsRemaining`
+- [x] **Cleanup:** Remove join code UI components
 - [ ] **Cleanup:** Remove `driftReport` handler if unused
 
 **Acceptance Criteria:**
-- [ ] Frequency picker shown for new users
-- [ ] All stations visible on dial with live/idle/empty distinction
-- [ ] DJ controls work correctly (owner only, while connected)
-- [ ] Tuning into idle stations works end-to-end (Spotify wakes, correct position)
-- [ ] Dead code (join codes, hot-seat, drift report) removed
+- [x] Frequency picker shown for new users
+- [x] All stations visible on dial with live/idle/empty distinction
+- [x] DJ controls work correctly (owner only, while connected)
+- [ ] Tuning into idle stations works end-to-end (Spotify wakes, correct position) — needs live testing
+- [x] Dead code (join codes, hot-seat, drift report) removed
 
 ---
 

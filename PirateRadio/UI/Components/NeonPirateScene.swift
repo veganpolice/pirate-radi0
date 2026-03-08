@@ -6,7 +6,7 @@ import SwiftUI
 struct NeonPirateScene: View {
     var color: Color = PirateTheme.signal
     var members: [Session.Member] = []
-    var djUserID: UserID = ""
+    var djUserID: UserID?
 
     @State private var bobPhase: Bool = false
     @State private var sailPulse: Bool = false

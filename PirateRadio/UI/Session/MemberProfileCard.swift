@@ -63,11 +63,7 @@ struct MemberProfileCard: View {
 
             // Stats grid
             HStack(spacing: 0) {
-                statItem(value: "\(member.tracksAdded)", label: "Tracks")
-                statDivider
-                statItem(value: "\(member.votesCast)", label: "Votes")
-                statDivider
-                statItem(value: formatMinutes(member.djTimeMinutes), label: "DJ Time")
+                statItem(value: "\(member.tracksAdded)", label: "Tracks Added")
             }
             .padding(.vertical, 16)
             .background(

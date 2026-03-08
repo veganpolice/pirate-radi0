@@ -12,7 +12,6 @@ const JWT_SECRET =
   process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
 const JWT_EXPIRY = "24h";
 const MAX_MEMBERS = 10;
-const MAX_SESSIONS_PER_USER_PER_HOUR = 5;
 const MAX_JOIN_ATTEMPTS_PER_IP_PER_MIN = 10;
 const PING_INTERVAL_MS = 15_000;
 const MAX_TRACK_DURATION_MS = 30 * 60 * 1000; // 30 minutes
@@ -24,9 +23,6 @@ const db = createDatabase(process.env.DB_PATH || ":memory:");
 
 // Prepared statements
 const stmtGetStation = db.prepare("SELECT * FROM stations WHERE user_id = ?");
-const stmtGetStationByFreq = db.prepare(
-  "SELECT * FROM stations WHERE frequency = ?"
-);
 const stmtInsertStation = db.prepare(
   "INSERT INTO stations (user_id, display_name, frequency) VALUES (?, ?, ?)"
 );
@@ -41,13 +37,22 @@ const stmtSaveSnapshot = db.prepare(
 );
 const stmtAllStations = db.prepare("SELECT * FROM stations");
 
+// --- Helpers ---
+
+/** Safely parse tracks_json, returning [] on corrupt data */
+function safeParseTracksJson(json) {
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 // --- In-Memory State (live sessions only) ---
 
 /** @type {Map<string, LiveSession>} userId → LiveSession */
 const liveSessions = new Map();
-
-/** @type {Map<string, number[]>} userId → creation timestamps */
-const sessionCreationLog = new Map();
 
 /** @type {Map<string, number[]>} ip → attempt timestamps */
 const joinAttemptLog = new Map();
@@ -186,7 +191,7 @@ app.get("/stations", authenticateHTTP, (_req, res) => {
       };
     }
     // Idle station — derive currentTrack from snapshot
-    const tracks = JSON.parse(row.tracks_json);
+    const tracks = safeParseTracksJson(row.tracks_json);
     const idx = Math.min(row.snapshot_track_index, Math.max(0, tracks.length - 1));
     return {
       userId: row.user_id,
@@ -248,77 +253,6 @@ app.get("/sessions/:userId", authenticateHTTP, (req, res) => {
   }
 
   res.json(liveSessionSnapshot(live));
-});
-
-// --- Legacy endpoints (kept for backward compat during Phase 2 transition) ---
-
-// Create session — now creates/returns the user's station
-app.post("/sessions", authenticateHTTP, (req, res) => {
-  const userId = req.user.sub;
-
-  // Rate limit
-  if (
-    !checkRateLimit(
-      sessionCreationLog,
-      userId,
-      MAX_SESSIONS_PER_USER_PER_HOUR,
-      60 * 60 * 1000
-    )
-  ) {
-    return res
-      .status(429)
-      .json({ error: "Too many sessions created. Try again later." });
-  }
-
-  const station = stmtGetStation.get(userId);
-  if (!station) {
-    return res
-      .status(400)
-      .json({ error: "Claim a frequency first via POST /stations/claim-frequency" });
-  }
-
-  // Boot live session
-  let live = liveSessions.get(userId);
-  if (!live) {
-    live = bootLiveSession(station);
-  }
-
-  recordRateLimit(sessionCreationLog, userId);
-  console.log(`[session:create] station=${userId}`);
-
-  res.status(201).json({
-    id: userId,
-    joinCode: "0000", // deprecated
-    creatorId: userId,
-    djUserId: userId,
-  });
-});
-
-// Join by code — redirect to join-by-id semantics
-app.post("/sessions/join", authenticateHTTP, (req, res) => {
-  const ip = req.ip || req.socket.remoteAddress;
-  const { code } = req.body;
-
-  if (
-    !checkRateLimit(
-      joinAttemptLog,
-      ip,
-      MAX_JOIN_ATTEMPTS_PER_IP_PER_MIN,
-      60 * 1000
-    )
-  ) {
-    return res
-      .status(429)
-      .json({ error: "Too many join attempts. Try again later." });
-  }
-  recordRateLimit(joinAttemptLog, ip);
-
-  if (!code || typeof code !== "string") {
-    return res.status(400).json({ error: "code required" });
-  }
-
-  // Join codes are deprecated — return 404
-  return res.status(404).json({ error: "Session not found" });
 });
 
 // --- WebSocket Server ---
@@ -605,8 +539,17 @@ function handleMessage(live, senderId, msg) {
       if (live.tracks.length >= MAX_QUEUE_SIZE) return;
       if (live.tracks.some((t) => t.nonce === msg.data.nonce)) return;
 
+      const t = msg.data.track;
+      const durationMs = Number(t.durationMs);
+      if (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > MAX_TRACK_DURATION_MS) return;
+
       const queueEntry = {
-        ...msg.data.track,
+        id: String(t.id || "").slice(0, 64),
+        name: String(t.name || "").slice(0, 256),
+        artist: String(t.artist || "").slice(0, 256),
+        albumName: String(t.albumName || "").slice(0, 256),
+        albumArtURL: String(t.albumArtURL || "").slice(0, 512),
+        durationMs,
         nonce: msg.data.nonce,
         addedBy: senderId,
       };
@@ -720,7 +663,7 @@ function handleMessage(live, senderId, msg) {
 // --- Live Session Management ---
 
 function bootLiveSession(stationRow) {
-  const tracks = JSON.parse(stationRow.tracks_json);
+  const tracks = safeParseTracksJson(stationRow.tracks_json);
   const { trackIndex, positionMs } = computePosition(
     tracks,
     stationRow.snapshot_track_index,
@@ -763,6 +706,13 @@ function snapshotAndTeardown(userId) {
   const live = liveSessions.get(userId);
   if (!live) return;
 
+  // Flush any pending debounced track write
+  const pendingWrite = persistDebounceTimers.get(userId);
+  if (pendingWrite) {
+    clearTimeout(pendingWrite);
+    persistDebounceTimers.delete(userId);
+  }
+
   clearAdvancement(live);
   if (live.destroyTimeout) {
     clearTimeout(live.destroyTimeout);
@@ -794,8 +744,20 @@ function saveSnapshot(userId, tracks, trackIndex, elapsedMs) {
   );
 }
 
+/** @type {Map<string, NodeJS.Timeout>} userId → pending write timer */
+const persistDebounceTimers = new Map();
+
 function persistTracks(live) {
-  stmtUpdateTracks.run(JSON.stringify(live.tracks), live.userId);
+  const existing = persistDebounceTimers.get(live.userId);
+  if (existing) clearTimeout(existing);
+
+  persistDebounceTimers.set(
+    live.userId,
+    setTimeout(() => {
+      persistDebounceTimers.delete(live.userId);
+      stmtUpdateTracks.run(JSON.stringify(live.tracks), live.userId);
+    }, 500)
+  );
 }
 
 // --- Compute Position (Lazy Snapshot) ---
@@ -806,23 +768,13 @@ export function computePosition(
   snapshotElapsedMs,
   snapshotTimestamp
 ) {
-  // Filter zero-duration tracks
-  const validTracks = tracks.filter((t) => {
+  const len = tracks.length;
+  // Check if any tracks have valid durations
+  const hasValidTracks = tracks.some((t) => {
     const d = Number(t.durationMs);
     return Number.isFinite(d) && d > 0;
   });
-
-  if (validTracks.length === 0) {
-    return { trackIndex: 0, positionMs: 0 };
-  }
-
-  // If all tracks are valid, use original indices; otherwise remap
-  // For simplicity, we work with the original tracks array but skip invalid ones
-  // Actually, the plan says to filter upfront. Let's work with validTracks
-  // but we need to map back to the original index.
-  // Simpler: just work with the full tracks array but skip zero-duration in the walk.
-
-  const len = tracks.length;
+  if (!hasValidTracks) return { trackIndex: 0, positionMs: 0 };
   if (len === 0) return { trackIndex: 0, positionMs: 0 };
 
   // Clamp snapshot index
@@ -983,7 +935,7 @@ function liveSessionSnapshot(live) {
 }
 
 function idleStationSnapshot(stationRow) {
-  const tracks = JSON.parse(stationRow.tracks_json);
+  const tracks = safeParseTracksJson(stationRow.tracks_json);
   const idx = Math.min(
     stationRow.snapshot_track_index,
     Math.max(0, tracks.length - 1)
@@ -999,7 +951,9 @@ function idleStationSnapshot(stationRow) {
     isPlaying: false,
     positionMs: stationRow.snapshot_elapsed_ms,
     positionTimestamp: stationRow.snapshot_timestamp,
-    queue: tracks,
+    queue: tracks.length > 1
+      ? [...tracks.slice(idx + 1), ...tracks.slice(0, idx)]
+      : [],
   };
 }
 
@@ -1087,11 +1041,6 @@ setInterval(() => {
 
 setInterval(() => {
   const now = Date.now();
-  for (const [key, timestamps] of sessionCreationLog) {
-    const recent = timestamps.filter((t) => now - t < 60 * 60 * 1000);
-    if (recent.length === 0) sessionCreationLog.delete(key);
-    else sessionCreationLog.set(key, recent);
-  }
   for (const [key, timestamps] of joinAttemptLog) {
     const recent = timestamps.filter((t) => now - t < 60 * 1000);
     if (recent.length === 0) joinAttemptLog.delete(key);

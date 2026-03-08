@@ -7,7 +7,6 @@ struct SessionSettingsView: View {
     @Environment(ToastManager.self) private var toastManager
     @Environment(\.dismiss) private var dismiss
 
-    @State private var showDJModePicker = false
     @State private var showEndConfirm = false
     @State private var showKickConfirm: Session.Member?
     @State private var showRecap = false
@@ -21,17 +20,11 @@ struct SessionSettingsView: View {
                 PirateTheme.void.ignoresSafeArea()
 
                 List {
-                    // DJ Mode section
-                    djModeSection
-
                     // Chairlift mode toggle
                     chairliftSection
 
                     // Members section
                     membersSection
-
-                    // Session code
-                    codeSection
 
                     // Actions
                     actionsSection
@@ -48,9 +41,6 @@ struct SessionSettingsView: View {
                 }
             }
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .sheet(isPresented: $showDJModePicker) {
-                djModePickerSheet
-            }
             .alert("Remove Member", isPresented: .init(
                 get: { showKickConfirm != nil },
                 set: { if !$0 { showKickConfirm = nil } }
@@ -87,50 +77,6 @@ struct SessionSettingsView: View {
     }
 
     // MARK: - Sections
-
-    private var djModeSection: some View {
-        Section {
-            HStack {
-                Image(systemName: sessionStore.session?.djMode.icon ?? "radio")
-                    .foregroundStyle(PirateTheme.broadcast)
-                Text(sessionStore.session?.djMode.rawValue ?? "")
-                    .font(PirateTheme.body(14))
-                    .foregroundStyle(.white)
-                Spacer()
-
-                if isDJ {
-                    Button("Change") {
-                        showDJModePicker = true
-                    }
-                    .font(PirateTheme.body(12))
-                    .foregroundStyle(PirateTheme.signal)
-                }
-            }
-
-            if isDJ, sessionStore.session?.djMode == .hotSeat {
-                HStack {
-                    Text("Rotate every")
-                        .font(PirateTheme.body(13))
-                        .foregroundStyle(.white.opacity(0.7))
-                    Spacer()
-                    Stepper(
-                        "\(sessionStore.session?.hotSeatSongsPerDJ ?? 3) songs",
-                        value: .init(
-                            get: { sessionStore.session?.hotSeatSongsPerDJ ?? 3 },
-                            set: { sessionStore.setHotSeatSongsPerDJ($0) }
-                        ),
-                        in: 1...10
-                    )
-                    .font(PirateTheme.body(13))
-                }
-            }
-        } header: {
-            Text("DJ MODE")
-                .font(PirateTheme.body(11))
-                .foregroundStyle(PirateTheme.broadcast.opacity(0.6))
-        }
-        .listRowBackground(Color.white.opacity(0.03))
-    }
 
     private var chairliftSection: some View {
         Section {
@@ -192,28 +138,6 @@ struct SessionSettingsView: View {
         .listRowBackground(Color.white.opacity(0.03))
     }
 
-    private var codeSection: some View {
-        Section {
-            HStack {
-                Text(sessionStore.session?.joinCode ?? "----")
-                    .font(PirateTheme.display(24))
-                    .foregroundStyle(PirateTheme.broadcast)
-                Spacer()
-                ShareLink(
-                    item: "Join my Pirate Radio session! Code: \(sessionStore.session?.joinCode ?? "")"
-                ) {
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundStyle(PirateTheme.signal)
-                }
-            }
-        } header: {
-            Text("SESSION CODE")
-                .font(PirateTheme.body(11))
-                .foregroundStyle(PirateTheme.broadcast.opacity(0.6))
-        }
-        .listRowBackground(Color.white.opacity(0.03))
-    }
-
     private var actionsSection: some View {
         Section {
             if isDJ {
@@ -233,43 +157,5 @@ struct SessionSettingsView: View {
             }
         }
         .listRowBackground(Color.white.opacity(0.03))
-    }
-
-    // MARK: - DJ Mode Picker Sheet
-
-    private var djModePickerSheet: some View {
-        NavigationStack {
-            ZStack {
-                PirateTheme.void.ignoresSafeArea()
-
-                VStack(spacing: 24) {
-                    DJModePicker(selectedMode: .init(
-                        get: { sessionStore.session?.djMode ?? .solo },
-                        set: { mode in
-                            if PirateRadioApp.demoMode {
-                                sessionStore.changeDJMode(mode)
-                                toastManager.show(.modeChanged, message: "Switched to \(mode.rawValue)")
-                            } else {
-                                toastManager.show(.comingSoon, message: "DJ mode switching coming soon")
-                            }
-                            showDJModePicker = false
-                        }
-                    ))
-                    .padding(.horizontal, 24)
-
-                    Spacer()
-                }
-                .padding(.top, 24)
-            }
-            .navigationTitle("Change Mode")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showDJModePicker = false }
-                        .foregroundStyle(PirateTheme.signal)
-                }
-            }
-            .toolbarColorScheme(.dark, for: .navigationBar)
-        }
     }
 }

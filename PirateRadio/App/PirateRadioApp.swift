@@ -8,7 +8,7 @@ struct PirateRadioApp: App {
     @State private var sessionStore: SessionStore?
     @State private var toastManager = ToastManager()
     @State private var mockTimerManager = MockTimerManager()
-    @AppStorage("pendingJoinCode") private var pendingJoinCode: String?
+    @AppStorage("pendingTuneUserId") private var pendingTuneUserId: String?
 
     /// Set to true to bypass Spotify auth and explore the UI with mock data.
     static let demoMode = false
@@ -39,9 +39,9 @@ struct PirateRadioApp: App {
                         let store = SessionStore(authManager: authManager)
                         store.toastManager = toastManager
                         sessionStore = store
-                        if let code = pendingJoinCode {
-                            pendingJoinCode = nil
-                            Task { await store.joinSession(code: code) }
+                        if let userId = pendingTuneUserId {
+                            pendingTuneUserId = nil
+                            Task { await store.joinSessionById(userId) }
                         }
                     } else if !isAuth {
                         sessionStore = nil
@@ -57,15 +57,13 @@ struct PirateRadioApp: App {
                     handleMockEvent(event)
                 }
                 .onOpenURL { url in
-                    guard url.scheme == "pirate-radio", url.host == "join" else { return }
-                    let code = url.lastPathComponent
-                    guard !code.isEmpty, code != "/",
-                          code.count <= 8,
-                          code.allSatisfy({ $0.isLetter || $0.isNumber }) else { return }
+                    guard url.scheme == "pirate-radio", url.host == "tune" else { return }
+                    let userId = url.lastPathComponent
+                    guard !userId.isEmpty, userId != "/" else { return }
                     if let sessionStore {
-                        Task { await sessionStore.joinSession(code: code) }
+                        Task { await sessionStore.joinSessionById(userId) }
                     } else {
-                        pendingJoinCode = code
+                        pendingTuneUserId = userId
                     }
                 }
                 .environment(authManager)
@@ -106,10 +104,6 @@ struct PirateRadioApp: App {
             toastManager.show(.memberLeft, message: "\(name) left the session")
         case .songRequested(let track, let by):
             toastManager.show(.songRequest, message: "\(by) requested \"\(track)\"")
-        case .voteCast(let track, let by, let isUp):
-            toastManager.show(.voteCast, message: "\(by) \(isUp ? "upvoted" : "downvoted") \"\(track)\"")
-        case .hotSeatRotation(let newDJ):
-            toastManager.show(.djChanged, message: "\(newDJ) is now DJ!")
         case .signalLost:
             toastManager.show(.signalLost, message: "Signal lost!")
         case .signalReconnected:
@@ -150,7 +144,9 @@ struct SessionRootView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if sessionStore.session != nil {
+                if sessionStore.needsFrequency {
+                    FrequencyPickerView()
+                } else if sessionStore.session != nil {
                     NowPlayingView()
                 } else {
                     DialHomeView()

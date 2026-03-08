@@ -864,37 +864,19 @@ describe("Pirate Radio API", () => {
     });
   });
 
-  // ----- Rate limiting -----
-
-  describe("Rate limiting", () => {
-    it("returns 429 when too many join attempts from same IP", async () => {
-      const token = await getToken(PORT, "joinlimit_user");
-      let got429 = false;
-      for (let i = 0; i < 20; i++) {
-        const res = await request(PORT, "POST", "/sessions/join", {
-          body: { code: "9999" },
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.statusCode === 429) {
-          got429 = true;
-          assert.ok(res.body.error);
-          break;
-        }
-      }
-      assert.ok(got429, "Expected a 429 response after exceeding rate limit");
-    });
-  });
-
   // ----- JWT validation -----
 
   describe("JWT validation", () => {
     it("returns 401 when Authorization header is missing", async () => {
-      const res = await request(PORT, "POST", "/sessions");
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: { userId: "someone" },
+      });
       assert.equal(res.statusCode, 401);
     });
 
     it("returns 401 when JWT is malformed", async () => {
-      const res = await request(PORT, "POST", "/sessions", {
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: { userId: "someone" },
         headers: { Authorization: "Bearer not.a.valid.jwt.token" },
       });
       assert.equal(res.statusCode, 401);

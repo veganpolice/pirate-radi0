@@ -75,7 +75,7 @@ actor WebSocketTransport: SessionTransport {
         components.scheme = baseURL.scheme == "https" ? "wss" : "ws"
         components.queryItems = [
             URLQueryItem(name: "token", value: token),
-            URLQueryItem(name: "sessionId", value: sessionID),
+            URLQueryItem(name: "userId", value: sessionID),
         ]
 
         guard let wsURL = components.url else {
@@ -234,7 +234,7 @@ actor WebSocketTransport: SessionTransport {
         let positionMs = d["positionMs"]?.doubleValue ?? 0
         let positionTimestamp = UInt64(d["positionTimestamp"]?.doubleValue ?? 0)
         let isPlaying = d["isPlaying"]?.boolValue ?? false
-        let djUserID = d["djUserId"]?.stringValue ?? ""
+        let djUserID: String? = d["djUserId"]?.stringValue
         let epoch = UInt64(d["epoch"]?.doubleValue ?? 0)
         let sequence = UInt64(d["sequence"]?.doubleValue ?? 0)
 

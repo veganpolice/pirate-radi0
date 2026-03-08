@@ -6,7 +6,7 @@ import SwiftUI
 struct BeatPulseBackground: View {
     var isPlaying: Bool
     var members: [Session.Member] = []
-    var djUserID: UserID = ""
+    var djUserID: UserID?
 
     @State private var bpm: Double = 128
     @State private var breathePhase: Bool = false
@@ -21,7 +21,7 @@ struct BeatPulseBackground: View {
 
     /// Compute the DJ ship's X from elapsed time (DJ uses offset 0).
     private func djShipX() -> CGFloat {
-        guard !djUserID.isEmpty else { return 0.5 }
+        guard let djUserID else { return 0.5 }
         let speed = stableSpeed(for: djUserID)
         let elapsed = Date.now.timeIntervalSince(sceneStart)
         let fraction = (elapsed.truncatingRemainder(dividingBy: speed)) / speed
@@ -107,7 +107,7 @@ struct BeatPulseBackground: View {
                     breathePhase.toggle()
                 }
                 // Spawn a ring from the DJ's flagship
-                if !djUserID.isEmpty {
+                if let djUserID {
                     let screenW = UIScreen.main.bounds.width
                     let screenH = UIScreen.main.bounds.height
                     let x = djShipX()

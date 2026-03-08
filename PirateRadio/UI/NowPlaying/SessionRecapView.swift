@@ -9,7 +9,6 @@ struct SessionRecapView: View {
     @State private var showTracks = false
     @State private var showTopTrack = false
     @State private var showHighlights = false
-    @State private var showLeaderboard = false
 
     @State private var animatedTime = 0
     @State private var animatedTracks = 0
@@ -56,20 +55,12 @@ struct SessionRecapView: View {
                                           value: stats.mostRequests.name, detail: "\(stats.mostRequests.count) requests")
                             highlightCard(icon: "crown.fill", label: "Top DJ",
                                           value: stats.topDJ.name, detail: "\(stats.topDJ.minutes)m on the decks")
-                            highlightCard(icon: "hand.thumbsup.fill", label: "Vote Machine",
-                                          value: stats.voteMachine.name, detail: "\(stats.voteMachine.count) votes cast")
                         }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    // DJ Leaderboard
-                    if showLeaderboard {
-                        leaderboard
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-
                     // Actions
-                    if showLeaderboard {
+                    if showHighlights {
                         VStack(spacing: 16) {
                             ShareLink(
                                 item: "Just finished a \(formatTime(stats.totalTimeMinutes)) Pirate Radio session! \(stats.tracksPlayed) tracks with the crew."
@@ -95,7 +86,7 @@ struct SessionRecapView: View {
                     }
 
                     // Watermark
-                    if showLeaderboard {
+                    if showHighlights {
                         Text("PIRATE RADIO")
                             .font(PirateTheme.display(12))
                             .foregroundStyle(.white.opacity(0.15))
@@ -183,54 +174,6 @@ struct SessionRecapView: View {
         )
     }
 
-    private var leaderboard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("DJ LEADERBOARD")
-                .font(PirateTheme.body(11))
-                .foregroundStyle(PirateTheme.broadcast.opacity(0.6))
-
-            let maxMinutes = stats.djLeaderboard.first?.minutes ?? 1
-
-            ForEach(Array(stats.djLeaderboard.enumerated()), id: \.offset) { index, entry in
-                HStack(spacing: 12) {
-                    Text("#\(index + 1)")
-                        .font(PirateTheme.display(14))
-                        .foregroundStyle(index == 0 ? PirateTheme.flare : .white.opacity(0.4))
-                        .frame(width: 28)
-
-                    Text(entry.name)
-                        .font(PirateTheme.body(14))
-                        .foregroundStyle(.white)
-                        .frame(width: 100, alignment: .leading)
-
-                    GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(PirateTheme.broadcast.opacity(0.6))
-                            .frame(
-                                width: geo.size.width * CGFloat(entry.minutes) / CGFloat(maxMinutes),
-                                height: 20
-                            )
-                    }
-                    .frame(height: 20)
-
-                    Text("\(entry.minutes)m")
-                        .font(PirateTheme.body(11))
-                        .foregroundStyle(.white.opacity(0.4))
-                        .frame(width: 36, alignment: .trailing)
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.white.opacity(0.03))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(PirateTheme.broadcast.opacity(0.15), lineWidth: 0.5)
-        )
-    }
-
     private func statBlock(value: String, label: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
@@ -268,10 +211,6 @@ struct SessionRecapView: View {
             // Highlights
             try? await Task.sleep(for: .seconds(0.5))
             withAnimation(.spring(duration: 0.5)) { showHighlights = true }
-
-            // Leaderboard
-            try? await Task.sleep(for: .seconds(0.5))
-            withAnimation(.spring(duration: 0.5)) { showLeaderboard = true }
         }
     }
 

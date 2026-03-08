@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Drives fake events on timers during demo mode.
-/// Fires member joins, song requests, votes, and hot-seat countdowns.
+/// Fires member joins, song requests, and signal events.
 @Observable
 @MainActor
 final class MockTimerManager {
@@ -16,8 +16,6 @@ final class MockTimerManager {
         case memberJoined(String)
         case memberLeft(String)
         case songRequested(trackName: String, by: String)
-        case voteCast(trackName: String, by: String, isUpvote: Bool)
-        case hotSeatRotation(newDJ: String)
         case signalLost
         case signalReconnected
         case voiceClipReceived(from: String)
@@ -28,7 +26,6 @@ final class MockTimerManager {
         isRunning = true
         startCrewDrip()
         startMemberEvents()
-        startVoteEvents()
         startRequestEvents()
     }
 
@@ -46,10 +43,6 @@ final class MockTimerManager {
             lastEvent = .signalReconnected
         }
         tasks.append(task)
-    }
-
-    func triggerHotSeatRotation(newDJ: String) {
-        lastEvent = .hotSeatRotation(newDJ: newDJ)
     }
 
     func triggerVoiceClip(from name: String) {
@@ -82,25 +75,6 @@ final class MockTimerManager {
                 let name = names.randomElement()!
                 let isJoin = Bool.random()
                 lastEvent = isJoin ? .memberJoined(name) : .memberLeft(name)
-            }
-        }
-        tasks.append(task)
-    }
-
-    private func startVoteEvents() {
-        let task = Task {
-            while !Task.isCancelled && isRunning {
-                let delay = Double.random(in: 5...10)
-                try? await Task.sleep(for: .seconds(delay))
-                guard !Task.isCancelled && isRunning else { break }
-
-                let trackNames = MockData.tracks.prefix(10).map(\.name)
-                let voters = MockData.members.map(\.displayName)
-                lastEvent = .voteCast(
-                    trackName: trackNames.randomElement()!,
-                    by: voters.randomElement()!,
-                    isUpvote: Bool.random()
-                )
             }
         }
         tasks.append(task)

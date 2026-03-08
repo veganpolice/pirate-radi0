@@ -42,7 +42,7 @@ enum PirateRadioError: LocalizedError {
         case .tokenRefreshFailed:
             return "Failed to refresh your session. Please sign in again."
         case .sessionNotFound:
-            return "Session not found. Check the code and try again."
+            return "Station not found. It may no longer be available."
         case .sessionFull:
             return "This session is full (max 10 crew members)."
         case .invalidJoinCode:

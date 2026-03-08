@@ -43,7 +43,7 @@ struct SessionSnapshot: Codable, Sendable {
     let ntpAnchor: UInt64
     let playbackRate: Double // 1.0 = playing, 0.0 = paused
     let queue: [Track]
-    let djUserID: UserID
+    let djUserID: UserID?
     let epoch: UInt64
     let sequenceNumber: UInt64
     let members: [SnapshotMember]
@@ -55,7 +55,7 @@ struct SessionSnapshot: Codable, Sendable {
     }
 
     init(trackID: String?, positionAtAnchor: Double, ntpAnchor: UInt64,
-         playbackRate: Double, queue: [Track], djUserID: UserID,
+         playbackRate: Double, queue: [Track], djUserID: UserID?,
          epoch: UInt64, sequenceNumber: UInt64,
          members: [SnapshotMember] = [], currentTrack: Track? = nil) {
         self.trackID = trackID

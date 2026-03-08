@@ -48,13 +48,13 @@ struct DialHomeView: View {
 
                 Spacer()
 
-                // "Start Broadcasting" button
+                // "Tune to My Station" button
                 Button {
-                    Task { await startBroadcasting() }
+                    Task { await sessionStore.tuneToMyStation() }
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "antenna.radiowaves.left.and.right")
-                        Text("Start Broadcasting")
+                        Text("Tune to My Station")
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -120,12 +120,4 @@ struct DialHomeView: View {
         }
     }
 
-    // MARK: - Actions
-
-    private func startBroadcasting() async {
-        if sessionStore.session != nil {
-            await sessionStore.leaveSession()
-        }
-        await sessionStore.createSession()
-    }
 }

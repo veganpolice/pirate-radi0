@@ -31,11 +31,10 @@ struct PirateRadioTests {
         #expect(track.durationFormatted == "1:01")
     }
 
-    @Test("Session join code is 4 characters")
-    func sessionJoinCodeLength() {
+    @Test("Session id matches creator")
+    func sessionIdMatchesCreator() {
         let session = Session(
-            id: "session-1",
-            joinCode: "ABCD",
+            id: "user-1",
             creatorID: "user-1",
             djUserID: "user-1",
             members: [],
@@ -44,7 +43,7 @@ struct PirateRadioTests {
             isPlaying: false,
             epoch: 0
         )
-        #expect(session.joinCode.count == 4)
+        #expect(session.id == session.creatorID)
     }
 
     @Test("NTPAnchoredPosition computes offset correctly")
@@ -627,8 +626,7 @@ struct SessionMemberTests {
 
     private func makeSession(members: [Session.Member] = []) -> Session {
         Session(
-            id: "session-1",
-            joinCode: "1234",
+            id: "creator",
             creatorID: "creator",
             djUserID: "creator",
             members: members,
@@ -712,8 +710,7 @@ struct SessionMemberTests {
     func sessionCodableRoundTrip() throws {
         let track = Track(id: "t1", name: "Song", artist: "A", albumName: "Al", albumArtURL: nil, durationMs: 200_000)
         let original = Session(
-            id: "session-99",
-            joinCode: "9876",
+            id: "creator-1",
             creatorID: "creator-1",
             djUserID: "dj-1",
             members: [

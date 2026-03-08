@@ -24,7 +24,7 @@ struct NowPlayingView: View {
 
     private var currentStationFrequency: Double? {
         guard let sessionId = sessionStore.session?.id else { return nil }
-        return sessionStore.stations.first(where: { $0.sessionId == sessionId })?.frequency
+        return sessionStore.stations.first(where: { $0.userId == sessionId })?.frequencyDisplay
     }
 
     var body: some View {
@@ -35,7 +35,7 @@ struct NowPlayingView: View {
             BeatPulseBackground(
                 isPlaying: sessionStore.session?.isPlaying ?? false,
                 members: sessionStore.session?.members ?? [],
-                djUserID: sessionStore.session?.djUserID ?? ""
+                djUserID: sessionStore.session?.djUserID
             )
 
             if chairliftMode {
@@ -56,25 +56,11 @@ struct NowPlayingView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                HStack(spacing: 12) {
-                    Button {
-                        Task { await sessionStore.leaveSession() }
-                    } label: {
-                        Image(systemName: "dial.low")
-                            .foregroundStyle(PirateTheme.signal)
-                    }
-
-                    if sessionStore.isCreator, let code = sessionStore.session?.joinCode {
-                        ShareLink(
-                            item: "Join my Pirate Radio station! Code: \(code)",
-                            subject: Text("Pirate Radio"),
-                            message: Text("Tune in with code \(code)")
-                        ) {
-                            Text(code)
-                                .font(PirateTheme.display(14))
-                                .foregroundStyle(PirateTheme.broadcast.opacity(0.7))
-                        }
-                    }
+                Button {
+                    Task { await sessionStore.leaveSession() }
+                } label: {
+                    Image(systemName: "dial.low")
+                        .foregroundStyle(PirateTheme.signal)
                 }
             }
 
@@ -114,8 +100,17 @@ struct NowPlayingView: View {
 
     private var mainContent: some View {
         VStack(spacing: 0) {
-            // Hot-seat banner
-            HotSeatBanner()
+            // Auto-DJ indicator when no DJ is connected
+            if sessionStore.session?.djUserID == nil, sessionStore.session?.isPlaying == true {
+                HStack(spacing: 6) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 12))
+                    Text("AUTO-DJ")
+                        .font(PirateTheme.display(12))
+                }
+                .foregroundStyle(PirateTheme.signal)
+                .padding(.vertical, 8)
+            }
 
             // Album art + track info, or waiting state
             if showArt {
@@ -161,7 +156,7 @@ struct NowPlayingView: View {
             NeonPirateScene(
                 color: PirateTheme.signal,
                 members: sessionStore.session?.members ?? [],
-                djUserID: sessionStore.session?.djUserID ?? ""
+                djUserID: sessionStore.session?.djUserID
             )
             .padding(.horizontal, 8)
 
@@ -273,7 +268,7 @@ struct NowPlayingView: View {
                                     .overlay(
                                         Circle()
                                             .strokeBorder(
-                                                member.id == session.djUserID ? PirateTheme.broadcast : member.avatarColor.color,
+                                                member.id == session.djUserID && session.djUserID != nil ? PirateTheme.broadcast : member.avatarColor.color,
                                                 lineWidth: 2
                                             )
                                     )
@@ -523,9 +518,7 @@ struct PlaylistBrowser: View {
             await sessionStore.play(track: tracks[0])
             guard sessionStore.session?.isPlaying == true else { return }
             if tracks.count > 1 {
-                for track in tracks[1...] {
-                    await sessionStore.addToQueue(track: track)
-                }
+                await sessionStore.batchAddToQueue(tracks: Array(tracks[1...]))
                 sessionStore.toastManager?.show(.songRequest, message: "Added \(tracks.count - 1) tracks from '\(playlist.name)'")
             }
         } catch {
