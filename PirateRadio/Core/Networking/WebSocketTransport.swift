@@ -57,7 +57,7 @@ actor WebSocketTransport: SessionTransport {
             throw PirateRadioError.notConnected
         }
 
-        let data = try JSONEncoder().encode(message)
+        let data = try message.toServerJSON()
         try await task.send(.data(data))
     }
 
@@ -120,7 +120,17 @@ actor WebSocketTransport: SessionTransport {
             return
         }
 
-        guard let syncMessage = try? JSONDecoder().decode(SyncMessage.self, from: data) else {
+        guard let envelope = try? JSONDecoder().decode(ServerEnvelope.self, from: data) else {
+            #if DEBUG
+            print("[WS] Failed to decode server envelope: \(String(data: data, encoding: .utf8) ?? "?")")
+            #endif
+            return
+        }
+
+        guard let syncMessage = envelope.toSyncMessage() else {
+            #if DEBUG
+            print("[WS] Unhandled server message type: \(envelope.type)")
+            #endif
             return
         }
 

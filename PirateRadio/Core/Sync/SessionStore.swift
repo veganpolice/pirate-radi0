@@ -194,7 +194,14 @@ final class SessionStore {
     private func connectToSession(sessionID: String, token: String) async throws {
         let transport = WebSocketTransport(baseURL: baseURL)
         let clock = KronosClock()
-        let player = SpotifyPlayer()
+        #if targetEnvironment(simulator)
+        let player = MockMusicSource()
+        #else
+        let accessToken = try await authManager.getAccessToken()
+        let player = SpotifyPlayer(accessToken: accessToken)
+        player.connect()
+        AppDelegate.activePlayer = player
+        #endif
 
         let engine = SyncEngine(musicSource: player, transport: transport, clock: clock)
 

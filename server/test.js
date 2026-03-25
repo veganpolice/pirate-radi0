@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { WebSocket } from "ws";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -377,5 +378,309 @@ describe("Pirate Radio API", () => {
 
       assert.ok(got429, "Expected a 429 response after exceeding rate limit");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WebSocket Tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Connect a WebSocket to the server and wait for the first message (stateSync).
+ * Returns { ws, firstMessage }.
+ */
+function connectWebSocket(port, token, sessionId) {
+  return new Promise((resolve, reject) => {
+    const url = `ws://127.0.0.1:${port}/?token=${encodeURIComponent(token)}&sessionId=${encodeURIComponent(sessionId)}`;
+    const ws = new WebSocket(url);
+    const timeout = setTimeout(() => {
+      ws.close();
+      reject(new Error("WebSocket connection timed out"));
+    }, 5000);
+
+    ws.on("message", (raw) => {
+      clearTimeout(timeout);
+      const msg = JSON.parse(raw.toString());
+      resolve({ ws, firstMessage: msg });
+    });
+
+    ws.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Wait for the next message on a WebSocket, with timeout.
+ */
+function waitForMessage(ws, timeoutMs = 3000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Timed out waiting for message")), timeoutMs);
+    ws.once("message", (raw) => {
+      clearTimeout(timeout);
+      resolve(JSON.parse(raw.toString()));
+    });
+  });
+}
+
+describe("WebSocket Sync Protocol", () => {
+  before(async () => {
+    // Reuse the server from the API tests (already running)
+    // If running standalone, start a new one
+    if (!serverProcess) {
+      await startServer();
+    }
+  });
+
+  after(() => {
+    stopServer();
+  });
+
+  it("sends stateSync on WebSocket connect", async () => {
+    const token = await getToken(PORT, "ws_dj_1");
+    const session = await createSession(PORT, token);
+
+    const { ws, firstMessage } = await connectWebSocket(PORT, token, session.id);
+    try {
+      assert.equal(firstMessage.type, "stateSync");
+      assert.equal(firstMessage.data.id, session.id);
+      assert.equal(firstMessage.data.djUserId, "ws_dj_1");
+      assert.equal(firstMessage.data.isPlaying, false);
+      assert.ok(Array.isArray(firstMessage.data.members));
+      assert.ok(Array.isArray(firstMessage.data.queue));
+    } finally {
+      ws.close();
+    }
+  });
+
+  it("broadcasts memberJoined when a listener connects", async () => {
+    const djToken = await getToken(PORT, "ws_dj_2");
+    const session = await createSession(PORT, djToken);
+
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+    try {
+      const listenerToken = await getToken(PORT, "ws_listener_2");
+
+      // Set up the listener for memberJoined BEFORE the listener connects
+      const memberJoinedPromise = waitForMessage(djWs);
+
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+      try {
+        const msg = await memberJoinedPromise;
+        assert.equal(msg.type, "memberJoined");
+        assert.equal(msg.data.userId, "ws_listener_2");
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("relays playPrepare from DJ to listeners", async () => {
+    const djToken = await getToken(PORT, "ws_dj_3");
+    const session = await createSession(PORT, djToken);
+
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+    try {
+      const listenerToken = await getToken(PORT, "ws_listener_3");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+      try {
+        // Wait for memberJoined on DJ side
+        await waitForMessage(djWs);
+
+        // DJ sends playPrepare
+        const preparePromise = waitForMessage(listenerWs);
+        djWs.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "track-xyz", track: { id: "track-xyz", name: "Test" } },
+        }));
+
+        const msg = await preparePromise;
+        assert.equal(msg.type, "playPrepare");
+        assert.equal(msg.data.trackId, "track-xyz");
+        assert.ok(msg.epoch > 0); // epoch incremented
+        assert.ok(msg.seq > 0);
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("ignores playPrepare from non-DJ", async () => {
+    const djToken = await getToken(PORT, "ws_dj_4");
+    const session = await createSession(PORT, djToken);
+
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+    try {
+      const listenerToken = await getToken(PORT, "ws_listener_4");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        // Listener (non-DJ) sends playPrepare — should be ignored
+        listenerWs.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "unauthorized" },
+        }));
+
+        // DJ should not receive the message. Wait briefly and check.
+        const result = await Promise.race([
+          waitForMessage(djWs, 500).then(() => "received").catch(() => "timeout"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 500)),
+        ]);
+        assert.equal(result, "timeout", "Non-DJ playPrepare should be silently ignored");
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("broadcasts memberLeft when listener disconnects", async () => {
+    const djToken = await getToken(PORT, "ws_dj_5");
+    const session = await createSession(PORT, djToken);
+
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+    try {
+      const listenerToken = await getToken(PORT, "ws_listener_5");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+
+      await waitForMessage(djWs); // memberJoined
+
+      const memberLeftPromise = waitForMessage(djWs);
+      listenerWs.close();
+
+      const msg = await memberLeftPromise;
+      assert.equal(msg.type, "memberLeft");
+      assert.equal(msg.data.userId, "ws_listener_5");
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("promotes new DJ when DJ disconnects", async () => {
+    const djToken = await getToken(PORT, "ws_dj_6");
+    const session = await createSession(PORT, djToken);
+
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+
+    const listenerToken = await getToken(PORT, "ws_listener_6");
+    const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+    try {
+      await waitForMessage(djWs); // memberJoined
+
+      // Collect messages from listener after DJ disconnects
+      const messages = [];
+      const collected = new Promise((resolve) => {
+        const timeout = setTimeout(() => resolve(messages), 2000);
+        listenerWs.on("message", (raw) => {
+          messages.push(JSON.parse(raw.toString()));
+          // Once we see stateSync, we have what we need
+          if (messages.some((m) => m.type === "stateSync")) {
+            clearTimeout(timeout);
+            resolve(messages);
+          }
+        });
+      });
+
+      djWs.close();
+      await collected;
+
+      const stateSync = messages.find((m) => m.type === "stateSync");
+      assert.ok(stateSync, "Expected stateSync after DJ disconnect");
+      assert.equal(stateSync.data.djUserId, "ws_listener_6");
+    } finally {
+      listenerWs.close();
+    }
+  });
+
+  it("responds to ping with pong containing server time", async () => {
+    const token = await getToken(PORT, "ws_ping_user");
+    const session = await createSession(PORT, token);
+
+    const { ws } = await connectWebSocket(PORT, token, session.id);
+    try {
+      const pongPromise = waitForMessage(ws);
+      ws.send(JSON.stringify({
+        type: "ping",
+        data: { clientSendTime: 1700000000000 },
+      }));
+
+      const msg = await pongPromise;
+      assert.equal(msg.type, "pong");
+      assert.equal(msg.data.clientSendTime, 1700000000000);
+      assert.equal(typeof msg.data.serverTime, "number");
+      assert.ok(msg.data.serverTime > 0);
+    } finally {
+      ws.close();
+    }
+  });
+
+  it("relays playCommit from DJ to listeners", async () => {
+    const djToken = await getToken(PORT, "ws_dj_7");
+    const session = await createSession(PORT, djToken);
+
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+    try {
+      const listenerToken = await getToken(PORT, "ws_listener_7");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        // DJ sends playPrepare first
+        djWs.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "track-commit", track: { id: "track-commit" } },
+        }));
+        await waitForMessage(listenerWs); // playPrepare
+
+        // DJ sends playCommit
+        const commitPromise = waitForMessage(listenerWs);
+        djWs.send(JSON.stringify({
+          type: "playCommit",
+          data: { ntpTimestamp: 1700000001500, positionMs: 0 },
+        }));
+
+        const msg = await commitPromise;
+        assert.equal(msg.type, "playCommit");
+        assert.ok(msg.epoch > 0);
+        assert.ok(msg.seq > 0);
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("relays pause from DJ to listeners", async () => {
+    const djToken = await getToken(PORT, "ws_dj_8");
+    const session = await createSession(PORT, djToken);
+
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+    try {
+      const listenerToken = await getToken(PORT, "ws_listener_8");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        const pausePromise = waitForMessage(listenerWs);
+        djWs.send(JSON.stringify({ type: "pause", data: {} }));
+
+        const msg = await pausePromise;
+        assert.equal(msg.type, "pause");
+        assert.equal(typeof msg.data.positionMs, "number");
+        assert.equal(typeof msg.data.ntpTimestamp, "number");
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
   });
 });
