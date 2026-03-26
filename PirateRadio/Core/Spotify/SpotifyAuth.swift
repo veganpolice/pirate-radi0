@@ -108,8 +108,9 @@ final class SpotifyAuthManager {
 
     /// Get a valid access token, refreshing if needed.
     func getAccessToken() async throws -> String {
-        if let expiry = tokenExpiry, Date.now > expiry.addingTimeInterval(-120) {
-            // Refresh proactively at 80% of expiry (2 min before)
+        // Always refresh if expired or expiry is unknown
+        let needsRefresh = tokenExpiry == nil || Date.now > (tokenExpiry ?? .distantPast).addingTimeInterval(-120)
+        if needsRefresh, refreshToken != nil {
             try await refreshAccessToken()
         }
         guard let token = accessToken else {
@@ -178,7 +179,19 @@ final class SpotifyAuthManager {
             .joined(separator: "&")
             .data(using: .utf8)
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, httpResponse) = try await URLSession.shared.data(for: request)
+
+        // If refresh fails (revoked, expired), clear tokens so user can re-auth
+        if let status = (httpResponse as? HTTPURLResponse)?.statusCode, status >= 400 {
+            print("[SpotifyAuth] Token refresh failed with status \(status)")
+            accessToken = nil
+            self.refreshToken = nil
+            tokenExpiry = nil
+            isAuthenticated = false
+            deleteTokensFromKeychain()
+            throw PirateRadioError.tokenExpired
+        }
+
         let response = try JSONDecoder().decode(TokenResponse.self, from: data)
 
         accessToken = response.accessToken
@@ -195,7 +208,9 @@ final class SpotifyAuthManager {
     /// Wait for user profile to be loaded (used when userID is needed but profile fetch may still be in-flight).
     func ensureUserProfile() async throws {
         if userID != nil { return }
-        await refreshUserProfile()
+        // Make sure we have a fresh token before fetching profile
+        let token = try await getAccessToken()
+        await refreshUserProfile(with: token)
         guard userID != nil else {
             throw PirateRadioError.notAuthenticated
         }
@@ -203,6 +218,10 @@ final class SpotifyAuthManager {
 
     private func refreshUserProfile() async {
         guard let token = accessToken else { return }
+        await refreshUserProfile(with: token)
+    }
+
+    private func refreshUserProfile(with token: String) async {
         var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me")!)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 

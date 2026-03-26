@@ -85,6 +85,8 @@ final class SessionStore {
             self.session = session
 
             try await connectToSession(sessionID: session.id, token: backendToken)
+        } catch let pirateError as PirateRadioError {
+            self.error = pirateError
         } catch {
             self.error = .sessionCreationFailed(underlying: error)
         }
