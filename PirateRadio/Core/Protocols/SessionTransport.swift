@@ -28,7 +28,7 @@ struct SyncMessage: Codable, Sendable {
         case skip
         case driftReport(trackID: String, positionMs: Int, ntpTimestamp: UInt64)
         case stateSync(SessionSnapshot)
-        case queueUpdate([String]) // Track IDs
+        case queueUpdate([Track])
         case memberJoined(UserID)
         case memberLeft(UserID)
     }
@@ -40,7 +40,7 @@ struct SessionSnapshot: Codable, Sendable {
     let positionAtAnchor: Double
     let ntpAnchor: UInt64
     let playbackRate: Double
-    let queue: [String]
+    let queue: [Track]
     let djUserID: UserID
     let epoch: UInt64
     let sequenceNumber: UInt64
@@ -54,6 +54,7 @@ protocol SessionTransport: Sendable {
     func connect(to session: SessionID, token: String) async throws
     func disconnect() async
     func send(_ message: SyncMessage) async throws
+    func sendRaw(_ data: Data) async throws
     var incomingMessages: AsyncStream<SyncMessage> { get }
     var connectionState: AsyncStream<ConnectionState> { get }
 }

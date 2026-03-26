@@ -44,7 +44,7 @@ actor SyncEngine {
     enum SessionUpdate {
         case trackChanged(Track?)
         case playbackStateChanged(isPlaying: Bool, positionMs: Int)
-        case queueUpdated([String])
+        case queueUpdated([Track])
         case memberJoined(UserID, String)
         case memberLeft(UserID)
         case connectionStateChanged(ConnectionState)
@@ -180,6 +180,26 @@ actor SyncEngine {
         try await musicSource.seek(to: .milliseconds(positionMs))
     }
 
+    func addToQueue(track: Track) async throws {
+        let nonce = UUID().uuidString
+        let envelope: [String: Any] = [
+            "type": "addToQueue",
+            "data": [
+                "track": [
+                    "id": track.id,
+                    "name": track.name,
+                    "artist": track.artist,
+                    "albumName": track.albumName,
+                    "albumArtURL": track.albumArtURL?.absoluteString ?? "",
+                    "durationMs": track.durationMs,
+                ] as [String: Any],
+                "nonce": nonce,
+            ] as [String: Any],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: envelope)
+        try await transport.sendRaw(data)
+    }
+
     // MARK: - Message Processing
 
     private func startListening() {
@@ -239,8 +259,8 @@ actor SyncEngine {
         case .stateSync(let snapshot):
             await handleStateSync(snapshot)
 
-        case .queueUpdate(let trackIDs):
-            onSessionUpdate?(.queueUpdated(trackIDs))
+        case .queueUpdate(let tracks):
+            onSessionUpdate?(.queueUpdated(tracks))
 
         case .memberJoined(let userID):
             onSessionUpdate?(.memberJoined(userID, ""))
@@ -376,8 +396,11 @@ actor SyncEngine {
 
         guard let trackID = snapshot.trackID else { return }
 
-        // Notify UI of track
+        // Notify UI of track and queue
         onSessionUpdate?(.trackChanged(Track(id: trackID, name: "", artist: "", albumName: "", albumArtURL: nil, durationMs: 0)))
+        if !snapshot.queue.isEmpty {
+            onSessionUpdate?(.queueUpdated(snapshot.queue))
+        }
 
         let now = clock.now()
         let currentPositionSec = snapshot.positionAtAnchor +

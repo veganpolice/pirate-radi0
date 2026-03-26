@@ -66,8 +66,7 @@ extension ServerEnvelope {
 
         case "queueUpdate":
             let queue = data["queue"]?.arrayValue ?? []
-            let trackIDs = queue.compactMap { $0.objectValue?["id"]?.stringValue }
-            msgType = .queueUpdate(trackIDs)
+            msgType = .queueUpdate(parseTracks(from: queue))
 
         case "memberJoined":
             guard let userID = data["userId"]?.stringValue else { return nil }
@@ -120,19 +119,37 @@ extension ServerEnvelope {
         let isPlaying = src["isPlaying"]?.boolValue ?? false
 
         let queueArray = src["queue"]?.arrayValue ?? []
-        let queueIDs = queueArray.compactMap { $0.objectValue?["id"]?.stringValue }
+        let queueTracks = parseTracks(from: queueArray)
 
         return SessionSnapshot(
             trackID: trackID,
             positionAtAnchor: positionMs / 1000.0,
             ntpAnchor: positionTimestamp,
             playbackRate: isPlaying ? 1.0 : 0.0,
-            queue: queueIDs,
+            queue: queueTracks,
             djUserID: djUserID,
             epoch: snapshotEpoch,
             sequenceNumber: sequenceNumber
         )
     }
+}
+
+// MARK: - Track parsing from server JSON
+
+private func parseTrack(from json: JSONValue) -> Track? {
+    guard let obj = json.objectValue,
+          let id = obj["id"]?.stringValue else { return nil }
+    let name = obj["name"]?.stringValue ?? ""
+    let artist = obj["artist"]?.stringValue ?? ""
+    let albumName = obj["albumName"]?.stringValue ?? obj["album"]?.stringValue ?? ""
+    let albumArtURL = obj["albumArtURL"]?.stringValue.flatMap { URL(string: $0) }
+        ?? obj["albumArt"]?.stringValue.flatMap { URL(string: $0) }
+    let durationMs = obj["durationMs"]?.intValue ?? 0
+    return Track(id: id, name: name, artist: artist, albumName: albumName, albumArtURL: albumArtURL, durationMs: durationMs)
+}
+
+private func parseTracks(from array: [JSONValue]) -> [Track] {
+    array.compactMap { parseTrack(from: $0) }
 }
 
 // MARK: - SyncMessage → Server JSON (outbound)

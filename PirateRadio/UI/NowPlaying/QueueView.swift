@@ -122,7 +122,7 @@ struct QueueView: View {
 
             if isResult {
                 Button {
-                    // TODO: Add to queue via session store
+                    Task { await sessionStore.addToQueue(track: track) }
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)

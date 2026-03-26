@@ -145,6 +145,14 @@ final class SessionStore {
         }
     }
 
+    func addToQueue(track: Track) async {
+        do {
+            try await syncEngine?.addToQueue(track: track)
+        } catch {
+            self.error = .playbackFailed(underlying: error)
+        }
+    }
+
     func pause() async {
         guard isDJ else { return }
         try? await syncEngine?.djPause()
@@ -230,8 +238,8 @@ final class SessionStore {
             session?.members.append(Session.Member(id: userID, displayName: name, isConnected: true))
         case .memberLeft(let userID):
             session?.members.removeAll { $0.id == userID }
-        case .queueUpdated:
-            break // Queue updates handled separately
+        case .queueUpdated(let tracks):
+            session?.queue = tracks
         case .anchorUpdated(let anchor, let offsetMs):
             currentAnchor = anchor
             clockOffsetMs = offsetMs

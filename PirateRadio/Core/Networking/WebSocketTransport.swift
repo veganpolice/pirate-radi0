@@ -61,6 +61,13 @@ actor WebSocketTransport: SessionTransport {
         try await task.send(.data(data))
     }
 
+    func sendRaw(_ data: Data) async throws {
+        guard let task = webSocketTask else {
+            throw PirateRadioError.notConnected
+        }
+        try await task.send(.data(data))
+    }
+
     // MARK: - Connection
 
     private func establishConnection() async throws {
