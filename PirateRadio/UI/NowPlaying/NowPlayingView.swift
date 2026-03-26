@@ -7,6 +7,7 @@ struct NowPlayingView: View {
 
     @State private var volume: Double = 0.5
     @State private var showQueue = false
+    @State private var showTrackSearch = false
 
     var body: some View {
         ZStack {
@@ -44,6 +45,16 @@ struct NowPlayingView: View {
         }
         .sheet(isPresented: $showQueue) {
             QueueView()
+        }
+        .sheet(isPresented: $showTrackSearch) {
+            TrackSearchView()
+        }
+        .task {
+            // Auto-play first queued track if nothing is playing
+            if sessionStore.session?.currentTrack == nil,
+               let firstTrack = sessionStore.session?.queue.first {
+                await sessionStore.play(track: firstTrack)
+            }
         }
     }
 
@@ -133,6 +144,13 @@ struct NowPlayingView: View {
                 // TODO: Skip to next in queue
             } label: {
                 Image(systemName: "forward.fill")
+                    .font(.title2)
+            }
+            .frame(minWidth: 60, minHeight: 60)
+
+            // Add track
+            Button { showTrackSearch = true } label: {
+                Image(systemName: "plus")
                     .font(.title2)
             }
             .frame(minWidth: 60, minHeight: 60)

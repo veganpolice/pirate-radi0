@@ -54,7 +54,7 @@ struct SessionRootView: View {
         NavigationStack {
             Group {
                 if let session = sessionStore.session {
-                    if session.currentTrack != nil {
+                    if session.currentTrack != nil || !session.queue.isEmpty {
                         NowPlayingView()
                     } else {
                         CreateSessionView()
