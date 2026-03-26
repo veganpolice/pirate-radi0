@@ -8,8 +8,15 @@ struct TrackSearchView: View {
 
     @State private var query = ""
     @State private var results: [Track] = []
+    @State private var suggestions: [Track] = []
     @State private var isSearching = false
+    @State private var isLoadingSuggestions = true
     @State private var searchTask: Task<Void, Never>?
+    @State private var client: SpotifyClient?
+
+    private var displayTracks: [Track] {
+        query.isEmpty ? suggestions : results
+    }
 
     var body: some View {
         NavigationStack {
@@ -26,7 +33,17 @@ struct TrackSearchView: View {
                             .foregroundStyle(.white)
                             .autocorrectionDisabled()
                             .submitLabel(.search)
-                            .onSubmit { search() }
+                            .onSubmit { performSearch() }
+
+                        if !query.isEmpty {
+                            Button {
+                                query = ""
+                                results = []
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.white.opacity(0.3))
+                            }
+                        }
                     }
                     .padding(12)
                     .background(
@@ -36,19 +53,29 @@ struct TrackSearchView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
 
-                    if isSearching {
+                    if isSearching || (isLoadingSuggestions && query.isEmpty) {
                         Spacer()
                         ProgressView()
                             .tint(PirateTheme.signal)
                         Spacer()
-                    } else if results.isEmpty && !query.isEmpty {
+                    } else if displayTracks.isEmpty && !query.isEmpty {
                         Spacer()
                         Text("No results")
                             .font(PirateTheme.body(14))
                             .foregroundStyle(.white.opacity(0.4))
                         Spacer()
                     } else {
-                        List(results) { track in
+                        if query.isEmpty && !suggestions.isEmpty {
+                            Text("YOUR TOP TRACKS")
+                                .font(PirateTheme.body(11))
+                                .foregroundStyle(PirateTheme.signal.opacity(0.5))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 16)
+                                .padding(.bottom, 4)
+                        }
+
+                        List(displayTracks) { track in
                             Button {
                                 Task {
                                     await sessionStore.play(track: track)
@@ -74,8 +101,11 @@ struct TrackSearchView: View {
                         .foregroundStyle(PirateTheme.signal)
                 }
             }
+            .task {
+                client = SpotifyClient(authManager: authManager)
+                await loadSuggestions()
+            }
             .onChange(of: query) { _, newValue in
-                // Debounced search
                 searchTask?.cancel()
                 guard !newValue.isEmpty else {
                     results = []
@@ -84,7 +114,7 @@ struct TrackSearchView: View {
                 searchTask = Task {
                     try? await Task.sleep(for: .milliseconds(400))
                     guard !Task.isCancelled else { return }
-                    search()
+                    performSearch()
                 }
             }
         }
@@ -92,7 +122,6 @@ struct TrackSearchView: View {
 
     private func trackRow(_ track: Track) -> some View {
         HStack(spacing: 12) {
-            // Album art
             AsyncImage(url: track.albumArtURL) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
@@ -115,7 +144,6 @@ struct TrackSearchView: View {
 
             Spacer()
 
-            // Duration
             Text(formatDuration(track.durationMs))
                 .font(PirateTheme.body(12))
                 .foregroundStyle(.white.opacity(0.3))
@@ -123,13 +151,22 @@ struct TrackSearchView: View {
         .contentShape(Rectangle())
     }
 
-    private func search() {
-        let currentQuery = query
-        guard !currentQuery.isEmpty else { return }
+    private func loadSuggestions() async {
+        guard let client else { return }
+        do {
+            suggestions = try await client.fetchTopTracks(limit: 20)
+        } catch {
+            suggestions = []
+        }
+        isLoadingSuggestions = false
+    }
+
+    private func performSearch() {
+        let currentQuery = query.trimmingCharacters(in: .whitespaces)
+        guard !currentQuery.isEmpty, let client else { return }
         isSearching = true
         Task {
             do {
-                let client = SpotifyClient(authManager: authManager)
                 results = try await client.searchTracks(query: currentQuery)
             } catch {
                 results = []

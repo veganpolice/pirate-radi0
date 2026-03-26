@@ -17,6 +17,7 @@ final class SpotifyAuthManager {
         "user-modify-playback-state",
         "user-read-currently-playing",
         "user-read-private",
+        "user-top-read",
         "streaming",
     ].joined(separator: " ")
 
