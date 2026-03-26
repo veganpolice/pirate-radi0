@@ -396,8 +396,9 @@ actor SyncEngine {
 
         guard let trackID = snapshot.trackID else { return }
 
-        // Notify UI of track and queue
-        onSessionUpdate?(.trackChanged(Track(id: trackID, name: "", artist: "", albumName: "", albumArtURL: nil, durationMs: 0)))
+        // Notify UI of track and queue — use full track from stateSync if available
+        let track = snapshot.currentTrack ?? Track(id: trackID, name: "", artist: "", albumName: "", albumArtURL: nil, durationMs: 0)
+        onSessionUpdate?(.trackChanged(track))
         if !snapshot.queue.isEmpty {
             onSessionUpdate?(.queueUpdated(snapshot.queue))
         }

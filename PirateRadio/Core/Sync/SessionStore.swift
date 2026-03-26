@@ -137,10 +137,17 @@ final class SessionStore {
     }
 
     func play(track: Track) async {
-        guard isDJ else { return }
+        print("[SessionStore] play called for track: \(track.name), isDJ=\(isDJ), userID=\(authManager.userID ?? "nil"), djUserID=\(session?.djUserID ?? "nil"), syncEngine=\(syncEngine != nil)")
+        // Set track immediately for UI transition, regardless of DJ status
+        session?.currentTrack = track
+        guard isDJ else {
+            print("[SessionStore] play: not DJ, skipping playback")
+            return
+        }
         do {
             try await syncEngine?.djPlay(track: track)
         } catch {
+            print("[SessionStore] play error: \(error)")
             self.error = .playbackFailed(underlying: error)
         }
     }
@@ -229,6 +236,7 @@ final class SessionStore {
     private func handleUpdate(_ update: SyncEngine.SessionUpdate) {
         switch update {
         case .connectionStateChanged(let state):
+            print("[SessionStore] connection: \(state)")
             connectionState = state
         case .syncStatus(let status):
             syncStatus = status
@@ -239,12 +247,19 @@ final class SessionStore {
         case .memberLeft(let userID):
             session?.members.removeAll { $0.id == userID }
         case .queueUpdated(let tracks):
+            print("[SessionStore] queueUpdated: \(tracks.count) tracks")
             session?.queue = tracks
         case .anchorUpdated(let anchor, let offsetMs):
             currentAnchor = anchor
             clockOffsetMs = offsetMs
         case .trackChanged(let track):
-            session?.currentTrack = track
+            print("[SessionStore] trackChanged: \(track?.name ?? "nil")")
+            // Only update if we get a track with metadata, or if clearing
+            if let track, track.name.isEmpty, session?.currentTrack != nil {
+                // stateSync sent a track ID without metadata — keep existing track info
+            } else {
+                session?.currentTrack = track
+            }
             if let track {
                 Task { await fetchBPMForTrack(track.id) }
             } else {

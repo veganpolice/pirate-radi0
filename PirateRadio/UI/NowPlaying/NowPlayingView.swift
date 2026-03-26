@@ -29,6 +29,15 @@ struct NowPlayingView: View {
 
                 Spacer()
 
+                // Pirate fleet
+                if let session = sessionStore.session {
+                    NeonPirateScene(
+                        members: session.members,
+                        djUserID: session.djUserID
+                    )
+                    .padding(.horizontal, 8)
+                }
+
                 // Crew strip
                 crewStrip
                     .padding(.vertical, 8)

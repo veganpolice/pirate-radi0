@@ -111,6 +111,7 @@ extension ServerEnvelope {
         // The stateSync wraps the snapshot in `data`
         let src = data
         let trackID = src["currentTrack"]?.objectValue?["id"]?.stringValue
+        let currentTrack: Track? = src["currentTrack"].flatMap { parseTrack(from: $0) }
         let positionMs = src["positionMs"]?.doubleValue ?? 0
         let positionTimestamp = src["positionTimestamp"]?.uint64Value ?? 0
         let sequenceNumber = src["sequence"]?.uint64Value ?? seq
@@ -123,6 +124,7 @@ extension ServerEnvelope {
 
         return SessionSnapshot(
             trackID: trackID,
+            currentTrack: currentTrack,
             positionAtAnchor: positionMs / 1000.0,
             ntpAnchor: positionTimestamp,
             playbackRate: isPlaying ? 1.0 : 0.0,

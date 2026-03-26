@@ -449,10 +449,11 @@ struct SyncMessageCodableTests {
     func stateSyncRoundTrip() throws {
         let snapshot = SessionSnapshot(
             trackID: "snap-track",
+            currentTrack: nil,
             positionAtAnchor: 22.5,
             ntpAnchor: 4_000_000,
             playbackRate: 1.0,
-            queue: ["q1", "q2"],
+            queue: [],
             djUserID: "dj-user",
             epoch: 5,
             sequenceNumber: 100

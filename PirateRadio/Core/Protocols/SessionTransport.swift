@@ -37,6 +37,7 @@ struct SyncMessage: Codable, Sendable {
 /// Snapshot of the full session state, used for reconnection and join-mid-song.
 struct SessionSnapshot: Codable, Sendable {
     let trackID: String?
+    let currentTrack: Track?
     let positionAtAnchor: Double
     let ntpAnchor: UInt64
     let playbackRate: Double
