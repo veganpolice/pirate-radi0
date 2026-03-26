@@ -90,6 +90,9 @@ actor SyncEngine {
     // MARK: - DJ Actions (only called by the DJ device)
 
     func djPlay(track: Track, positionMs: Int = 0) async throws {
+        // Notify UI immediately so the view transitions
+        onSessionUpdate?(.trackChanged(track))
+
         let now = clock.now()
         let leadTime: UInt64 = 1500 // ms
         let commitTime = now + leadTime
@@ -208,6 +211,8 @@ actor SyncEngine {
             preparedTrackID = trackID
 
         case .playCommit(let trackID, let startAtNtp, _):
+            // Notify UI of track change (listeners don't have the full Track metadata yet)
+            onSessionUpdate?(.trackChanged(Track(id: trackID, name: "", artist: "", albumName: "", albumArtURL: nil, durationMs: 0)))
             await executePlayCommit(trackID: trackID, startAtNtp: startAtNtp, positionMs: 0)
             startDriftChecking()
 
@@ -371,6 +376,9 @@ actor SyncEngine {
 
         guard let trackID = snapshot.trackID else { return }
 
+        // Notify UI of track
+        onSessionUpdate?(.trackChanged(Track(id: trackID, name: "", artist: "", albumName: "", albumArtURL: nil, durationMs: 0)))
+
         let now = clock.now()
         let currentPositionSec = snapshot.positionAtAnchor +
             (Double(now - snapshot.ntpAnchor) / 1000.0) * snapshot.playbackRate
@@ -381,6 +389,7 @@ actor SyncEngine {
                 at: .seconds(currentPositionSec)
             )
             startDriftChecking()
+            onSessionUpdate?(.playbackStateChanged(isPlaying: true, positionMs: Int(currentPositionSec * 1000)))
         }
 
         let anchor = NTPAnchoredPosition(
