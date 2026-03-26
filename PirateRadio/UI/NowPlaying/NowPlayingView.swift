@@ -23,11 +23,15 @@ struct NowPlayingView: View {
                 trackInfo
                     .padding(.top, 12)
 
+                // Up next queue preview
+                upNextPreview
+                    .padding(.top, 16)
+
                 Spacer()
 
                 // Crew strip
                 crewStrip
-                    .padding(.vertical, 16)
+                    .padding(.vertical, 8)
 
                 // Controls
                 if sessionStore.isDJ {
@@ -73,6 +77,64 @@ struct NowPlayingView: View {
                 Text(track.artist)
                     .font(PirateTheme.body(14))
                     .foregroundStyle(.white.opacity(0.6))
+            }
+        }
+    }
+
+    // MARK: - Up Next Preview
+
+    private var upNextPreview: some View {
+        let queue = Array((sessionStore.session?.queue ?? []).prefix(3))
+        return Group {
+            if !queue.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("UP NEXT")
+                            .font(PirateTheme.body(11))
+                            .foregroundStyle(PirateTheme.signal.opacity(0.4))
+
+                        Spacer()
+
+                        if (sessionStore.session?.queue.count ?? 0) > 3 {
+                            Button { showQueue = true } label: {
+                                Text("See All")
+                                    .font(PirateTheme.body(11))
+                                    .foregroundStyle(PirateTheme.signal.opacity(0.6))
+                            }
+                        }
+                    }
+
+                    ForEach(queue) { track in
+                        HStack(spacing: 10) {
+                            AsyncImage(url: track.albumArtURL) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(.white.opacity(0.08))
+                            }
+                            .frame(width: 36, height: 36)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(track.name)
+                                    .font(PirateTheme.body(13))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .lineLimit(1)
+                                Text(track.artist)
+                                    .font(PirateTheme.body(11))
+                                    .foregroundStyle(.white.opacity(0.35))
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Text(track.durationFormatted)
+                                .font(PirateTheme.body(11))
+                                .foregroundStyle(.white.opacity(0.2))
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
             }
         }
     }
