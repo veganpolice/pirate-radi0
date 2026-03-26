@@ -192,6 +192,15 @@ final class SpotifyAuthManager {
 
     // MARK: - User Profile
 
+    /// Wait for user profile to be loaded (used when userID is needed but profile fetch may still be in-flight).
+    func ensureUserProfile() async throws {
+        if userID != nil { return }
+        await refreshUserProfile()
+        guard userID != nil else {
+            throw PirateRadioError.notAuthenticated
+        }
+    }
+
     private func refreshUserProfile() async {
         guard let token = accessToken else { return }
         var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me")!)

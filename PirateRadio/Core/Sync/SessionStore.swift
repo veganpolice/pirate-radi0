@@ -244,7 +244,13 @@ final class SessionStore {
     }
 
     private func getBackendToken() async throws -> String {
-        guard let userID = authManager.userID else {
+        // userID may not be set yet if profile fetch is still in-flight after cold launch
+        var userID = authManager.userID
+        if userID == nil {
+            try await authManager.ensureUserProfile()
+            userID = authManager.userID
+        }
+        guard let userID else {
             throw PirateRadioError.notAuthenticated
         }
 
