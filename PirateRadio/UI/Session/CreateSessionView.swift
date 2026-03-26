@@ -5,6 +5,8 @@ import SwiftUI
 struct CreateSessionView: View {
     @Environment(SessionStore.self) private var sessionStore
 
+    @State private var showTrackSearch = false
+
     var body: some View {
         ZStack {
             PirateTheme.void.ignoresSafeArea()
@@ -49,6 +51,18 @@ struct CreateSessionView: View {
                     .font(PirateTheme.body(14))
                     .foregroundStyle(.white.opacity(0.6))
 
+                    // Pick a track (primary action)
+                    Button {
+                        showTrackSearch = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "music.note.list")
+                            Text("Pick a Track")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(GloveButtonStyle(color: PirateTheme.broadcast))
+
                     // Share button
                     ShareLink(
                         item: "Join my Pirate Radio session! Code: \(session.joinCode)",
@@ -70,6 +84,9 @@ struct CreateSessionView: View {
                 }
                 .padding(.horizontal, 24)
             }
+        }
+        .sheet(isPresented: $showTrackSearch) {
+            TrackSearchView()
         }
     }
 }
