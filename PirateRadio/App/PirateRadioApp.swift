@@ -13,9 +13,14 @@ struct PirateRadioApp: App {
                 .preferredColorScheme(.dark)
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     if isAuth {
-                        sessionStore = SessionStore(authManager: authManager)
+                        sessionStore = sessionStore ?? SessionStore(authManager: authManager)
                     } else {
                         sessionStore = nil
+                    }
+                }
+                .onAppear {
+                    if authManager.isAuthenticated {
+                        sessionStore = SessionStore(authManager: authManager)
                     }
                 }
                 .optionalEnvironment(sessionStore)
