@@ -46,6 +46,13 @@ final class SpotifyAuthManager {
         }
     }
 
+    /// Configure for demo/preview mode without real authentication.
+    func enableDemoMode() {
+        isAuthenticated = true
+        userID = "demo-user-1"
+        displayName = "DJ Powder"
+    }
+
     // MARK: - Public API
 
     /// Start the Spotify OAuth/PKCE login flow.
