@@ -30,11 +30,15 @@ struct PirateRadioApp: App {
 
 struct RootView: View {
     @Environment(SpotifyAuthManager.self) private var authManager
+    @Environment(SessionStore.self) private var sessionStore: SessionStore?
 
     var body: some View {
         Group {
-            if authManager.isAuthenticated {
+            if authManager.isAuthenticated, let sessionStore {
                 SessionRootView()
+                    .environment(sessionStore)
+            } else if authManager.isAuthenticated {
+                ProgressView("Loading…")
             } else {
                 SpotifyAuthView()
             }
