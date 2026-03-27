@@ -240,6 +240,17 @@ final class SessionStore {
         isLoading = false
     }
 
+    // MARK: - Playback Info
+
+    /// Estimated BPM for the current track (stub — future: fetch from Spotify audio features).
+    var currentBPM: Double? { 120 }
+
+    /// Estimated playback position in seconds at the given wall-clock time.
+    func currentPlaybackPosition(at date: Date) -> Double {
+        // TODO: expose NTP-anchored position from SyncEngine
+        return 0
+    }
+
     // MARK: - DJ Actions
 
     var isDJ: Bool {
