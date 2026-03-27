@@ -640,18 +640,19 @@
       try {
         const resp = await fetch(`${url}/admin/sessions`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const sessions = await resp.json();
+        const serverTime = Date.now();
 
         document.getElementById('statusDot').className = 'status-dot live';
         document.getElementById('statusText').textContent = 'live';
-        document.getElementById('sessionCount').textContent = `${data.sessions.length} station${data.sessions.length !== 1 ? 's' : ''}`;
+        document.getElementById('sessionCount').textContent = `${sessions.length} station${sessions.length !== 1 ? 's' : ''}`;
         document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
 
         // Diff and log changes
-        diffState(previousState, data.sessions);
-        previousState = data.sessions;
+        diffState(previousState, sessions);
+        previousState = sessions;
 
-        document.getElementById('content').innerHTML = renderSessions(data.sessions, data.serverTime);
+        document.getElementById('content').innerHTML = renderSessions(sessions, serverTime);
       } catch (err) {
         document.getElementById('statusDot').className = 'status-dot dead';
         document.getElementById('statusText').textContent = 'disconnected';
