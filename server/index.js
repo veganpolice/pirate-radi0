@@ -63,9 +63,47 @@ const joinAttemptLog = new Map();
 const app = express();
 app.use(express.json());
 
+// CORS for monitoring dashboard
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 // Health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", sessions: sessions.size });
+});
+
+// Admin: list all sessions (no auth — monitoring only, no secrets exposed)
+app.get("/admin/sessions", (_req, res) => {
+  const result = [];
+  for (const session of sessions.values()) {
+    result.push({
+      id: session.id,
+      joinCode: session.joinCode,
+      creatorId: session.creatorId,
+      djUserId: session.djUserId,
+      members: Array.from(session.members.values()).map((m) => ({
+        userId: m.userId,
+        displayName: m.displayName,
+        joinedAt: m.joinedAt,
+        alive: m.alive,
+      })),
+      epoch: session.epoch,
+      sequence: session.sequence,
+      currentTrack: session.currentTrack,
+      isPlaying: session.isPlaying,
+      positionMs: session.positionMs,
+      positionTimestamp: session.positionTimestamp,
+      queue: session.queue,
+      lastActivity: session.lastActivity,
+      codeCreatedAt: session.codeCreatedAt,
+    });
+  }
+  res.json({ sessions: result, serverTime: Date.now() });
 });
 
 // Authenticate: client sends Spotify user info, gets a JWT
