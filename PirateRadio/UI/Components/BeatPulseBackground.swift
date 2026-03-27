@@ -6,7 +6,6 @@ import SwiftUI
 struct BeatPulseBackground: View {
     var isPlaying: Bool
     var members: [Session.Member] = []
-    var djUserID: UserID = ""
 
     @State private var bpm: Double = 128
     @State private var breathePhase: Bool = false
@@ -19,10 +18,10 @@ struct BeatPulseBackground: View {
         return 14.0 + Double(hash % 800) / 100.0
     }
 
-    /// Compute the DJ ship's X from elapsed time (DJ uses offset 0).
-    private func djShipX() -> CGFloat {
-        guard !djUserID.isEmpty else { return 0.5 }
-        let speed = stableSpeed(for: djUserID)
+    /// Compute a random member's ship X from elapsed time.
+    private func randomMemberShipX() -> CGFloat {
+        guard let member = members.first else { return 0.5 }
+        let speed = stableSpeed(for: member.id)
         let elapsed = Date.now.timeIntervalSince(sceneStart)
         let fraction = (elapsed.truncatingRemainder(dividingBy: speed)) / speed
         return -0.05 + fraction * 1.1
@@ -106,16 +105,16 @@ struct BeatPulseBackground: View {
                 withAnimation(.easeInOut(duration: Double.random(in: 6...10))) {
                     breathePhase.toggle()
                 }
-                // Spawn a ring from the DJ's flagship
-                if !djUserID.isEmpty {
+                // Spawn a ring from a member's ship
+                if !members.isEmpty {
                     let screenW = UIScreen.main.bounds.width
                     let screenH = UIScreen.main.bounds.height
-                    let x = djShipX()
+                    let x = randomMemberShipX()
                     let spawnPoint = CGPoint(x: x * screenW, y: screenH * 0.52)
-                    let djColor = members.first(where: { $0.id == djUserID })?.avatarColor.color ?? PirateTheme.signal
+                    let ringColor = members.randomElement()?.avatarColor.color ?? PirateTheme.signal
                     let ring = SpawnedRing(
                         birthPosition: spawnPoint,
-                        color: djColor.opacity(0.6),
+                        color: ringColor.opacity(0.6),
                         rotation: Double.random(in: 0...360)
                     )
                     withAnimation(.spring(duration: 0.3)) {

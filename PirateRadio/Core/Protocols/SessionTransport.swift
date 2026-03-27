@@ -20,14 +20,8 @@ struct SyncMessage: Codable, Sendable {
     let timestamp: UInt64 // NTP timestamp
 
     enum SyncMessageType: Codable, Sendable {
-        case playPrepare(trackID: String, prepareDeadline: UInt64)
-        case playCommit(trackID: String, startAtNtp: UInt64, refSeq: UInt64)
-        case pause(atNtp: UInt64)
-        case resume(atNtp: UInt64)
-        case seek(positionMs: Int, atNtp: UInt64)
         case skip
         case addToQueue(track: Track, nonce: String)
-        case driftReport(trackID: String, positionMs: Int, ntpTimestamp: UInt64)
         case stateSync(SessionSnapshot)
         case queueUpdate([Track])
         case memberJoined(userID: UserID, displayName: String)
@@ -35,14 +29,14 @@ struct SyncMessage: Codable, Sendable {
     }
 }
 
-/// Snapshot of the full session state, used for reconnection and join-mid-song.
+/// Snapshot of the full station state, used for reconnection and join-mid-song.
 struct SessionSnapshot: Codable, Sendable {
     let trackID: String?
     let positionAtAnchor: Double // seconds
     let ntpAnchor: UInt64
     let playbackRate: Double // 1.0 = playing, 0.0 = paused
     let queue: [Track]
-    let djUserID: UserID
+    let stationName: String
     let epoch: UInt64
     let sequenceNumber: UInt64
     let members: [SnapshotMember]
@@ -54,7 +48,7 @@ struct SessionSnapshot: Codable, Sendable {
     }
 
     init(trackID: String?, positionAtAnchor: Double, ntpAnchor: UInt64,
-         playbackRate: Double, queue: [Track], djUserID: UserID,
+         playbackRate: Double, queue: [Track], stationName: String = "",
          epoch: UInt64, sequenceNumber: UInt64,
          members: [SnapshotMember] = [], currentTrack: Track? = nil) {
         self.trackID = trackID
@@ -62,7 +56,7 @@ struct SessionSnapshot: Codable, Sendable {
         self.ntpAnchor = ntpAnchor
         self.playbackRate = playbackRate
         self.queue = queue
-        self.djUserID = djUserID
+        self.stationName = stationName
         self.epoch = epoch
         self.sequenceNumber = sequenceNumber
         self.members = members

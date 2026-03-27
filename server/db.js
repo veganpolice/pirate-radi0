@@ -87,19 +87,30 @@ export function loadStations() {
   if (!db) return [];
 
   const rows = db.prepare("SELECT * FROM stations").all();
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    frequency: row.frequency,
-    currentTrack: row.current_track_json ? JSON.parse(row.current_track_json) : null,
-    isPlaying: row.is_playing === 1,
-    positionMs: row.position_ms,
-    positionTimestamp: row.position_timestamp,
-    epoch: row.epoch,
-    sequence: row.sequence,
-    queue: JSON.parse(row.queue_json),
-    history: JSON.parse(row.history_json),
-  }));
+  return rows.map((row) => {
+    let currentTrack = null;
+    let queue = [];
+    let history = [];
+    try { currentTrack = row.current_track_json ? JSON.parse(row.current_track_json) : null; } catch { /* corrupted, reset */ }
+    try { queue = JSON.parse(row.queue_json); } catch { /* corrupted, reset */ }
+    try { history = JSON.parse(row.history_json); } catch { /* corrupted, reset */ }
+    if (!Array.isArray(queue)) queue = [];
+    if (!Array.isArray(history)) history = [];
+
+    return {
+      id: row.id,
+      name: row.name,
+      frequency: row.frequency,
+      currentTrack,
+      isPlaying: row.is_playing === 1,
+      positionMs: row.position_ms,
+      positionTimestamp: row.position_timestamp,
+      epoch: row.epoch,
+      sequence: row.sequence,
+      queue,
+      history,
+    };
+  });
 }
 
 export function closeDB() {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The radio dial home screen. Auto-tunes on appear, shows live stations
-/// as notches on the dial, and offers a "Start Broadcasting" CTA.
+/// as notches on the dial. Tap a station to tune in.
 struct DialHomeView: View {
     @Environment(SessionStore.self) private var sessionStore
 
@@ -28,19 +28,6 @@ struct DialHomeView: View {
                 )
                 .padding(.horizontal, 24)
 
-                // "My Broadcast" button
-                Button {
-                    Task { await startBroadcasting() }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                        Text("My Broadcast")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(GloveButtonStyle(color: PirateTheme.broadcast))
-                .padding(.horizontal, 24)
-
                 if let error = sessionStore.error {
                     Text(error.errorDescription ?? "Something went wrong")
                         .font(PirateTheme.body(13))
@@ -56,7 +43,7 @@ struct DialHomeView: View {
             await sessionStore.autoTune()
         }
         .onChange(of: sessionStore.session) { oldValue, newValue in
-            // Re-fetch stations when returning from a session (e.g. leaving NowPlayingView)
+            // Re-fetch stations when returning from a session
             if oldValue != nil && newValue == nil {
                 Task { await sessionStore.fetchStations() }
             }
@@ -75,17 +62,6 @@ struct DialHomeView: View {
                     .font(PirateTheme.body(16))
                     .foregroundStyle(PirateTheme.signal)
             }
-        } else if sessionStore.stations.isEmpty {
-            VStack(spacing: 8) {
-                Text("PIRATE RADIO")
-                    .font(PirateTheme.display(28))
-                    .foregroundStyle(PirateTheme.signal)
-                    .neonGlow(PirateTheme.signal, intensity: 0.5)
-
-                Text("Nobody's on right now")
-                    .font(PirateTheme.body(14))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
         } else {
             VStack(spacing: 8) {
                 Text("PIRATE RADIO")
@@ -93,19 +69,10 @@ struct DialHomeView: View {
                     .foregroundStyle(PirateTheme.signal)
                     .neonGlow(PirateTheme.signal, intensity: 0.5)
 
-                Text("\(sessionStore.stations.count) station\(sessionStore.stations.count == 1 ? "" : "s") live")
+                Text("5 stations on air — pick one")
                     .font(PirateTheme.body(14))
                     .foregroundStyle(.white.opacity(0.5))
             }
         }
-    }
-
-    // MARK: - Actions
-
-    private func startBroadcasting() async {
-        if sessionStore.session != nil {
-            await sessionStore.leaveSession()
-        }
-        await sessionStore.createSession()
     }
 }

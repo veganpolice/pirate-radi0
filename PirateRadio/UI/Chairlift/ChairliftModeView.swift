@@ -56,38 +56,19 @@ struct ChairliftModeView: View {
 
                 Spacer()
 
-                // Simplified controls: just play/pause + skip (large targets)
-                HStack(spacing: 48) {
-                    // Play / Pause
-                    Button {
-                        Task {
-                            if sessionStore.session?.isPlaying == true {
-                                await sessionStore.pause()
-                            } else {
-                                await sessionStore.resume()
-                            }
-                        }
-                    } label: {
-                        Image(systemName: sessionStore.session?.isPlaying == true ? "pause.fill" : "play.fill")
-                            .font(.system(size: 36))
+                // Simplified controls: just skip (large target)
+                Button {
+                    if PirateRadioApp.demoMode {
+                        sessionStore.demoSkipToNext()
+                    } else {
+                        Task { await sessionStore.skipToNext() }
                     }
-                    .frame(width: 80, height: 80)
-                    .buttonStyle(GloveButtonStyle(color: PirateTheme.broadcast))
-
-                    // Skip
-                    Button {
-                        if PirateRadioApp.demoMode {
-                            sessionStore.demoSkipToNext()
-                        } else {
-                            Task { await sessionStore.skipToNext() }
-                        }
-                    } label: {
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 28))
-                    }
-                    .frame(width: 80, height: 80)
-                    .foregroundStyle(PirateTheme.broadcast)
+                } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 28))
                 }
+                .frame(width: 80, height: 80)
+                .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
 
                 // Volume
                 FrequencyDial(value: $volume, color: PirateTheme.signal)

@@ -17,6 +17,8 @@ const MAX_MEMBERS = 50;
 const PING_INTERVAL_MS = 15_000;
 const MAX_TRACK_DURATION_MS = 30 * 60 * 1000; // 30 minutes — clamp for timer safety
 const MAX_QUEUE_SIZE = 100;
+const MAX_HISTORY_SIZE = 200; // cap history to prevent unbounded memory growth
+const SKIP_COOLDOWN_MS = 3_000; // 1 skip per 3 seconds per station
 
 // --- In-Memory State ---
 
@@ -72,6 +74,7 @@ function bootStations() {
       queue: existing?.queue || [],
       history: existing?.history || [],
       advancementTimer: null,
+      lastSkipTime: 0,
     };
 
     stations.set(def.id, station);
@@ -309,12 +312,18 @@ wss.on("connection", (ws) => {
 function handleMessage(station, senderId, msg) {
   switch (msg.type) {
     case "skip": {
+      const now = Date.now();
+      if (now - station.lastSkipTime < SKIP_COOLDOWN_MS) return;
+      station.lastSkipTime = now;
       advanceQueue(station);
       break;
     }
 
     case "addToQueue": {
       if (!msg.data?.track || !msg.data?.nonce) return;
+      // Validate track has a usable duration (prevent wedged stations)
+      const dur = Number(msg.data.track.durationMs);
+      if (!Number.isFinite(dur) || dur <= 0 || dur > MAX_TRACK_DURATION_MS) return;
       if (station.queue.length >= MAX_QUEUE_SIZE) return;
       // Idempotency: check nonce across queue, current track, and history
       if (station.queue.some((t) => t.nonce === msg.data.nonce)) return;
@@ -335,11 +344,8 @@ function handleMessage(station, senderId, msg) {
 
       persistStation(station);
 
-      // Auto-start: if station is idle and this is the first track, start playing
-      if (!station.isPlaying && !station.currentTrack) {
-        advanceQueue(station);
-      } else if (!station.isPlaying && station.currentTrack) {
-        // Station was idle with a "last played" track — start the new song
+      // Auto-start: if station is idle, begin playback
+      if (!station.isPlaying) {
         advanceQueue(station);
       }
       break;
@@ -397,13 +403,18 @@ function advanceQueue(station) {
   // Push current track to history before advancing
   if (station.currentTrack) {
     station.history.push(station.currentTrack);
+    // Cap history to prevent unbounded memory growth
+    if (station.history.length > MAX_HISTORY_SIZE) {
+      station.history = station.history.slice(-MAX_HISTORY_SIZE);
+    }
   }
 
   let nextTrack = station.queue.shift();
 
   // If queue is empty, loop from history
   if (!nextTrack && station.history.length > 0) {
-    station.queue = [...station.history];
+    // Strip nonces so looped tracks can be re-added by users
+    station.queue = station.history.map(({ nonce, ...track }) => track);
     station.history = [];
     nextTrack = station.queue.shift();
   }
@@ -523,8 +534,13 @@ server.listen(PORT, () => {
 process.on("SIGTERM", () => {
   for (const station of stations.values()) {
     clearAdvancement(station);
+    for (const member of station.members.values()) {
+      member.ws.close(1001, "Server shutting down");
+    }
     persistStation(station);
   }
   closeDB();
-  process.exit(0);
+  server.close(() => process.exit(0));
+  // Force exit after 5s if connections don't close cleanly
+  setTimeout(() => process.exit(0), 5000).unref();
 });
