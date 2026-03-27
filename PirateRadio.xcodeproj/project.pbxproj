@@ -17,6 +17,7 @@
 		2F58E8039C295B038D93EE6F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACFBFA27C23C7AB6F0C857F /* AppDelegate.swift */; };
 		3017E628F6D9A5281095ADBC /* RequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33A70C95D0D61E8C88D1591A /* RequestsView.swift */; };
 		3841354410B4BBA56538044D /* Kronos in Frameworks */ = {isa = PBXBuildFile; productRef = 808F79ADA3F3C0F7A40DC874 /* Kronos */; };
+		3DAD82500573D58C0BDAED4E /* SessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7944EEB43CBF9D74199648 /* SessionStoreTests.swift */; };
 		41BC77BD716ECF265A8DB6D7 /* WalkieTalkieButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98F9153B2BC2FC35733B3D6 /* WalkieTalkieButton.swift */; };
 		4560AFC130E2A5E1E2CA4F9F /* TrackProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33C3112283966EE1D927A76 /* TrackProgressBar.swift */; };
 		46DEE3BB2125BE46F96498A4 /* JoinSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2F8B2FD2A9DDC751223CA6 /* JoinSessionView.swift */; };
@@ -143,6 +144,7 @@
 		F15BEE3A88814DC1FBECEA3A /* SpotifyAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuth.swift; sourceTree = "<group>"; };
 		F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRTStaticOverlay.swift; sourceTree = "<group>"; };
 		F98ECD25694E483F36914616 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		FF7944EEB43CBF9D74199648 /* SessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStoreTests.swift; sourceTree = "<group>"; };
 		FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GloveButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -255,6 +257,7 @@
 			isa = PBXGroup;
 			children = (
 				34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */,
+				FF7944EEB43CBF9D74199648 /* SessionStoreTests.swift */,
 				6EFCDBE27CF9597D6CE90B6E /* SyncEngineTests.swift */,
 				4C00BA13BF7A9BD612650DB7 /* WireProtocolTests.swift */,
 			);
@@ -567,6 +570,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C272F9E948BD5979306D92A7 /* PirateRadioTests.swift in Sources */,
+				3DAD82500573D58C0BDAED4E /* SessionStoreTests.swift in Sources */,
 				9FADC6A88F7B7F9DE1C6B0E0 /* SyncEngineTests.swift in Sources */,
 				CB2566BF70FEED4613734552 /* WireProtocolTests.swift in Sources */,
 			);

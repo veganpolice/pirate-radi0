@@ -356,7 +356,7 @@ final class SessionStore {
         self.syncEngine = engine
     }
 
-    private func handleUpdate(_ update: SyncEngine.SessionUpdate) {
+    func handleUpdate(_ update: SyncEngine.SessionUpdate) {
         switch update {
         case .connectionStateChanged(let state):
             connectionState = state
@@ -398,7 +398,7 @@ final class SessionStore {
         }
     }
 
-    private func handleStateSync(_ snapshot: SessionSnapshot) {
+    func handleStateSync(_ snapshot: SessionSnapshot) {
         print("[SessionStore] Received stateSync: dj=\(snapshot.djUserID), members=\(snapshot.members.count), track=\(snapshot.trackID ?? "none")")
 
         let previousTrackID = session?.currentTrack?.id
