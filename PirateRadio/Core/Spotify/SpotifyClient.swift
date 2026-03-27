@@ -89,6 +89,48 @@ actor SpotifyClient {
         )
     }
 
+    // MARK: - User Top Tracks
+
+    func fetchTopTracks(limit: Int = 20) async throws -> [Track] {
+        let token = try await authManager.getAccessToken()
+        var components = URLComponents(string: "https://api.spotify.com/v1/me/top/tracks")!
+        components.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "time_range", value: "short_term"),
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+
+        let topTracks = try JSONDecoder().decode(TopTracksResponse.self, from: data)
+        return topTracks.items.map { item in
+            Track(
+                id: item.id,
+                name: item.name,
+                artist: item.artists.first?.name ?? "Unknown",
+                albumName: item.album.name,
+                albumArtURL: item.album.images.first.flatMap { URL(string: $0.url) },
+                durationMs: item.durationMs
+            )
+        }
+    }
+
+    // MARK: - Audio Features
+
+    func fetchAudioFeatures(trackID: String) async throws -> AudioFeatures {
+        let token = try await authManager.getAccessToken()
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/audio-features/\(trackID)")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+
+        return try JSONDecoder().decode(AudioFeatures.self, from: data)
+    }
+
     // MARK: - Helpers
 
     private func validateResponse(_ response: URLResponse) throws {
@@ -145,4 +187,16 @@ private struct SpotifyImage: Codable {
     let url: String
     let width: Int?
     let height: Int?
+}
+
+// MARK: - Audio Features Response
+
+struct AudioFeatures: Codable, Sendable {
+    let tempo: Double           // BPM, e.g. 120.0
+    let timeSignature: Int      // Beats per bar, e.g. 4
+
+    enum CodingKeys: String, CodingKey {
+        case tempo
+        case timeSignature = "time_signature"
+    }
 }

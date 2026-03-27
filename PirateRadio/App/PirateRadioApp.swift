@@ -134,8 +134,8 @@ struct SessionRootView: View {
         NavigationStack {
             Group {
                 if let session = sessionStore.session {
-                    if session.currentTrack != nil || !sessionStore.isCreator {
-                        // Show player if track is playing OR if we joined someone else's session
+                    if session.currentTrack != nil || !session.queue.isEmpty || !sessionStore.isCreator {
+                        // Show player if track is playing, queue has songs, or we joined someone else's session
                         NowPlayingView()
                     } else {
                         CreateSessionView()

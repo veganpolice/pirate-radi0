@@ -275,12 +275,12 @@ final class SpotifyAuthManager: NSObject {
     }
 
     /// Open the Spotify app to wake it up, then connect AppRemote.
-    /// Use this when AppRemote fails to connect (Spotify not running).
-    func wakeSpotifyAndConnect() {
+    /// Pass a track URI (e.g. "spotify:track:xyz") to start the right song immediately,
+    /// avoiding Spotify resuming whatever it was last playing.
+    func wakeSpotifyAndConnect(playURI: String = "") {
         guard let token = accessToken else { return }
         appRemote.connectionParameters.accessToken = token
-        // authorizeAndPlayURI opens Spotify app; empty string = don't auto-play
-        appRemote.authorizeAndPlayURI("")
+        appRemote.authorizeAndPlayURI(playURI)
     }
 
     /// Disconnect from the Spotify app (call when entering background).

@@ -66,6 +66,13 @@ struct NowPlayingView: View {
         }
         .onAppear { startEntranceAnimation() }
         .onShake { handleShake() }
+        .task {
+            // Auto-play first queued track if nothing is currently playing
+            if sessionStore.session?.currentTrack == nil,
+               let firstTrack = sessionStore.session?.queue.first {
+                await sessionStore.play(track: firstTrack)
+            }
+        }
     }
 
     // MARK: - Main Content

@@ -28,13 +28,13 @@ struct DialHomeView: View {
                 )
                 .padding(.horizontal, 24)
 
-                // "Start Broadcasting" button
+                // "My Broadcast" button
                 Button {
                     Task { await startBroadcasting() }
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "antenna.radiowaves.left.and.right")
-                        Text("Start Broadcasting")
+                        Text("My Broadcast")
                     }
                     .frame(maxWidth: .infinity)
                 }

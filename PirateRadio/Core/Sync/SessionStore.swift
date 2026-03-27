@@ -260,7 +260,7 @@ final class SessionStore {
         // Ensure Spotify app is connected before playing
         if !authManager.isConnectedToSpotifyApp {
             print("[SessionStore] AppRemote not connected — waking Spotify app")
-            await ensureSpotifyConnected()
+            await ensureSpotifyConnected(trackID: track.id)
             if !authManager.isConnectedToSpotifyApp {
                 print("[SessionStore] Still not connected after waiting")
                 self.error = .playbackFailed(underlying: NSError(domain: "PirateRadio", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not connect to Spotify app. Make sure Spotify is installed."]))
@@ -285,8 +285,10 @@ final class SessionStore {
     }
 
     /// Wake Spotify app and wait for AppRemote connection.
-    private func ensureSpotifyConnected() async {
-        authManager.wakeSpotifyAndConnect()
+    /// Pass a trackID to start that song immediately instead of resuming Spotify's last song.
+    private func ensureSpotifyConnected(trackID: String? = nil) async {
+        let uri = trackID.map { "spotify:track:\($0)" } ?? ""
+        authManager.wakeSpotifyAndConnect(playURI: uri)
         for _ in 0..<20 {
             try? await Task.sleep(for: .milliseconds(500))
             if authManager.isConnectedToSpotifyApp { break }
@@ -448,7 +450,7 @@ final class SessionStore {
             if !authManager.isConnectedToSpotifyApp {
                 print("[SessionStore] stateSync shows active playback — waking Spotify for listener")
                 Task {
-                    await ensureSpotifyConnected()
+                    await ensureSpotifyConnected(trackID: snapshot.trackID)
                     if authManager.isConnectedToSpotifyApp {
                         print("[SessionStore] Spotify connected — retrying catch-up playback")
                         await syncEngine?.retryCatchUpPlayback()
