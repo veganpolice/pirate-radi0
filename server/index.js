@@ -3,6 +3,9 @@ import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
 // --- Configuration ---
 
@@ -129,6 +132,13 @@ app.get("/admin/sessions", (_req, res) => {
     });
   }
   res.json({ sessions: result, serverTime: Date.now() });
+});
+
+// Monitor dashboard
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const monitorHTML = readFileSync(join(__dirname, "monitor.html"), "utf-8");
+app.get("/monitor", (_req, res) => {
+  res.type("html").send(monitorHTML);
 });
 
 // Authenticate: client sends Spotify user info, gets a JWT
