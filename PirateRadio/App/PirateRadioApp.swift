@@ -81,12 +81,12 @@ struct PirateRadioApp: App {
         guard let event else { return }
         switch event {
         case .memberJoined(let name):
-            toastManager.show(.memberJoined, message: "\(name) joined the session")
+            toastManager.show(.memberJoined, message: "\(name) joined the station")
             if let member = MockData.members.first(where: { $0.displayName == name }) {
                 sessionStore?.addMember(member)
             }
         case .memberLeft(let name):
-            toastManager.show(.memberLeft, message: "\(name) left the session")
+            toastManager.show(.memberLeft, message: "\(name) left the station")
         case .songRequested(let track, let by):
             toastManager.show(.songRequest, message: "\(by) requested \"\(track)\"")
         case .voteCast(let track, let by, let isUp):
@@ -132,17 +132,10 @@ struct SessionRootView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let session = sessionStore.session {
-                    if session.currentTrack != nil || !session.queue.isEmpty || !sessionStore.isCreator {
-                        // Show player if track is playing, queue has songs, or we joined someone else's session
-                        NowPlayingView()
-                    } else {
-                        CreateSessionView()
-                    }
-                } else {
-                    DialHomeView()
-                }
+            if sessionStore.session != nil {
+                NowPlayingView()
+            } else {
+                DialHomeView()
             }
         }
     }

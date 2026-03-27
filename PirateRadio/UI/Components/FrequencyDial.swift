@@ -126,7 +126,7 @@ struct FrequencyDial: View {
     private func centerLabel(size: CGFloat) -> some View {
         if let station = snappedStation {
             VStack(spacing: 2) {
-                Text(station.displayName)
+                Text(station.name)
                     .font(PirateTheme.display(size * 0.08))
                     .foregroundStyle(color)
                     .lineLimit(1)

@@ -66,7 +66,7 @@ struct BeatVisualizer: View {
               store.session?.isPlaying == true,
               bpm > 0 else { return 0 }
 
-        let positionSeconds = store.currentPlaybackPosition(at: date)
+        let positionSeconds = store.currentPlaybackPosition
         let beatsElapsed = positionSeconds * (bpm / 60.0)
         return beatsElapsed.truncatingRemainder(dividingBy: 1.0)
     }
@@ -79,7 +79,7 @@ struct BeatVisualizer: View {
         maxRadius: CGFloat,
         phase: Double
     ) {
-        let ringColor = store.isDJ ? PirateTheme.broadcast : PirateTheme.signal
+        let ringColor = PirateTheme.signal
         let bpm = store.currentBPM ?? 120
         // Anti-strobe: reduce intensity for fast BPM (>180)
         let intensityScale = bpm > 180 ? 120.0 / bpm : 1.0
@@ -156,7 +156,7 @@ struct BeatVisualizer: View {
         center: CGPoint,
         maxRadius: CGFloat
     ) {
-        let ringColor = (store.isDJ ? PirateTheme.broadcast : PirateTheme.signal)
+        let ringColor = (PirateTheme.signal)
         let ringPath = Path(ellipseIn: CGRect(
             x: center.x - maxRadius * 0.35,
             y: center.y - maxRadius * 0.35,
@@ -184,7 +184,7 @@ struct BeatVisualizer: View {
         context.fill(disc, with: .color(PirateTheme.void))
         context.stroke(
             disc,
-            with: .color((store.isDJ ? PirateTheme.broadcast : PirateTheme.signal).opacity(0.3)),
+            with: .color((PirateTheme.signal).opacity(0.3)),
             lineWidth: 1
         )
     }

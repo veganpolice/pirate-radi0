@@ -44,10 +44,6 @@ actor MockSessionTransport: SessionTransport {
         sentMessages.append(message)
     }
 
-    func sendRaw(_ data: Data) async throws {
-        // no-op for tests
-    }
-
     // MARK: - Test Helpers
 
     /// Simulate receiving a message from the server.

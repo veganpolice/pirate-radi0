@@ -79,21 +79,21 @@ enum MockData {
 
     static let members: [Session.Member] = [
         .init(id: "demo-user-1", displayName: "DJ Powder", isConnected: true,
-              tracksAdded: 12, votesCast: 8, djTimeMinutes: 45, avatarColor: .magenta),
+              tracksAdded: 12, votesCast: 8, avatarColor: .magenta),
         .init(id: "demo-user-2", displayName: "Shredder", isConnected: true,
-              tracksAdded: 8, votesCast: 24, djTimeMinutes: 15, avatarColor: .cyan),
+              tracksAdded: 8, votesCast: 24, avatarColor: .cyan),
         .init(id: "demo-user-3", displayName: "Avalanche", isConnected: true,
-              tracksAdded: 3, votesCast: 38, djTimeMinutes: 0, avatarColor: .amber),
+              tracksAdded: 3, votesCast: 38, avatarColor: .amber),
         .init(id: "demo-user-4", displayName: "Mogul Queen", isConnected: true,
-              tracksAdded: 6, votesCast: 15, djTimeMinutes: 20, avatarColor: .green),
+              tracksAdded: 6, votesCast: 15, avatarColor: .green),
         .init(id: "demo-user-5", displayName: "Apres Amy", isConnected: true,
-              tracksAdded: 2, votesCast: 31, djTimeMinutes: 10, avatarColor: .purple),
+              tracksAdded: 2, votesCast: 31, avatarColor: .purple),
         .init(id: "demo-user-6", displayName: "Gondola Greg", isConnected: true,
-              tracksAdded: 1, votesCast: 4, djTimeMinutes: 0, avatarColor: .pink),
+              tracksAdded: 1, votesCast: 4, avatarColor: .pink),
         .init(id: "demo-user-7", displayName: "Fresh Tracks", isConnected: true,
-              tracksAdded: 9, votesCast: 19, djTimeMinutes: 5, avatarColor: .orange),
+              tracksAdded: 9, votesCast: 19, avatarColor: .orange),
         .init(id: "demo-user-8", displayName: "Black Diamond", isConnected: true,
-              tracksAdded: 5, votesCast: 22, djTimeMinutes: 0, avatarColor: .blue),
+              tracksAdded: 5, votesCast: 22, avatarColor: .blue),
     ]
 
     // MARK: - Discovery Sessions (8)
@@ -160,9 +160,7 @@ enum MockData {
         let tracksPlayed: Int
         let topTrack: Track
         let mostRequests: (name: String, count: Int)
-        let topDJ: (name: String, minutes: Int)
         let voteMachine: (name: String, count: Int)
-        let djLeaderboard: [(name: String, minutes: Int)]
     }
 
     static let sessionStats = SessionStats(
@@ -170,15 +168,7 @@ enum MockData {
         tracksPlayed: 47,
         topTrack: tracks[2],
         mostRequests: ("Shredder", 12),
-        topDJ: ("DJ Powder", 75),
-        voteMachine: ("Avalanche", 38),
-        djLeaderboard: [
-            ("DJ Powder", 75),
-            ("Mogul Queen", 20),
-            ("Shredder", 15),
-            ("Apres Amy", 10),
-            ("Fresh Tracks", 5),
-        ]
+        voteMachine: ("Avalanche", 38)
     )
 
     // MARK: - Demo Session Factory
@@ -186,20 +176,15 @@ enum MockData {
     /// Members who aren't in the initial session — they join over time.
     static let lateJoiners: [Session.Member] = Array(members.dropFirst(2))
 
-    static func demoSession(djMode: DJMode = .solo) -> Session {
+    static func demoSession() -> Session {
         Session(
-            id: UUID().uuidString,
-            joinCode: "7734",
-            creatorID: "demo-user-1",
-            djUserID: "demo-user-1",
+            id: "station-88",
+            stationName: "88.🏴‍☠️",
             members: Array(members.prefix(2)),
             queue: demoQueue,
             currentTrack: tracks[0],
             isPlaying: true,
-            epoch: 1,
-            djMode: djMode,
-            hotSeatSongsPerDJ: 3,
-            hotSeatSongsRemaining: 2
+            epoch: 1
         )
     }
 }

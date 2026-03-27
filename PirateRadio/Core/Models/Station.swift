@@ -1,12 +1,12 @@
 import Foundation
 
-/// A live station on the dial, returned by GET /stations.
+/// A public station on the radio dial, returned by GET /stations.
 struct Station: Codable, Identifiable {
-    let userId: String
-    let displayName: String
-    let frequency: Double
-    let sessionId: String
+    let id: String          // e.g. "station-88"
+    let name: String        // e.g. "88.🏴‍☠️"
+    let frequency: Double   // e.g. 88.1
     let currentTrack: Track?
-
-    var id: String { userId }
+    let isPlaying: Bool
+    let listenerCount: Int
+    let queueLength: Int
 }

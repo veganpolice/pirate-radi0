@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// The main now-playing screen shown during an active session.
-/// Album art, track info, progress bar, controls, crew strip,
-/// hot-seat banner, walkie-talkie megaphone, and bottom menu bar.
+/// Album art, track info, track tiles, crew strip, and bottom menu bar.
 struct NowPlayingView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(ToastManager.self) private var toastManager
@@ -21,12 +20,9 @@ struct NowPlayingView: View {
     @State private var showControls = false
     @State private var showCrew = false
 
-    // Track progress
-    @State private var trackStartDate: Date = .now
-    @State private var lastTrackID: String?
-
-    // Request badge count — derived from queue in real mode, demo uses static count
-    @State private var pendingRequestCount = PirateRadioApp.demoMode ? 5 : 0
+    // Track progress — positionOrigin is the Date at which positionMs was 0
+    @State private var positionOrigin: Date = .distantPast
+    @State private var trackedTrackID: String?
 
     var body: some View {
         ZStack {
@@ -35,8 +31,7 @@ struct NowPlayingView: View {
             // Pulsing beat background — behind all UI
             BeatPulseBackground(
                 isPlaying: sessionStore.session?.isPlaying ?? false,
-                members: sessionStore.session?.members ?? [],
-                djUserID: sessionStore.session?.djUserID ?? ""
+                members: sessionStore.session?.members ?? []
             )
 
             if chairliftMode {
@@ -50,7 +45,7 @@ struct NowPlayingView: View {
         }
         .sheet(isPresented: $showQueue) { QueueView() }
         .sheet(isPresented: $showRequests) { RequestsView() }
-        .sheet(isPresented: $showSettings) { SessionSettingsView() }
+        .sheet(isPresented: $showSettings) { StationSettingsView() }
         .sheet(item: $showMemberProfile) { member in
             MemberProfileCard(member: member)
                 .presentationDetents([.medium])
@@ -67,22 +62,26 @@ struct NowPlayingView: View {
             }
         }
         .onAppear { startEntranceAnimation() }
-        .onShake { handleShake() }
-        .task {
-            // Auto-play first queued track if nothing is currently playing
-            if sessionStore.session?.currentTrack == nil,
-               let firstTrack = sessionStore.session?.queue.first {
-                await sessionStore.play(track: firstTrack)
-            }
+        .onChange(of: sessionStore.session?.currentTrack?.id) { _, newTrackID in
+            updatePositionOrigin(forTrackID: newTrackID)
         }
+        .onChange(of: sessionStore.session?.isPlaying) { _, _ in
+            updatePositionOrigin(forTrackID: sessionStore.session?.currentTrack?.id)
+        }
+        .onShake { handleShake() }
     }
 
     // MARK: - Main Content
 
     private var mainContent: some View {
         VStack(spacing: 0) {
-            // Hot-seat banner
-            HotSeatBanner()
+            // Station name header
+            if let name = sessionStore.session?.stationName, !name.isEmpty {
+                Text(name)
+                    .font(PirateTheme.display(16))
+                    .foregroundStyle(PirateTheme.signal)
+                    .padding(.top, 8)
+            }
 
             // Track tiles: current + upcoming + add bar
             if showArt {
@@ -95,8 +94,7 @@ struct NowPlayingView: View {
             // Neon pirate fleet sailing between mountains
             NeonPirateScene(
                 color: PirateTheme.signal,
-                members: sessionStore.session?.members ?? [],
-                djUserID: sessionStore.session?.djUserID ?? ""
+                members: sessionStore.session?.members ?? []
             )
             .padding(.horizontal, 8)
 
@@ -109,16 +107,10 @@ struct NowPlayingView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Controls
+            // Controls — universal skip + mute
             if showControls {
-                Group {
-                    if sessionStore.isDJ {
-                        djControls
-                    } else {
-                        listenerControls
-                    }
-                }
-                .transition(.scale(scale: 0.8).combined(with: .opacity))
+                stationControls
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
 
             // Bottom menu bar
@@ -133,22 +125,11 @@ struct NowPlayingView: View {
         HStack(spacing: 0) {
             // Messages / Requests
             Button { showRequests = true } label: {
-                ZStack(alignment: .topTrailing) {
-                    VStack(spacing: 3) {
-                        Image(systemName: "tray.full")
-                            .font(.system(size: 20, weight: .medium))
-                        Text("Messages")
-                            .font(PirateTheme.body(9))
-                    }
-
-                    if pendingRequestCount > 0 {
-                        Text("\(pendingRequestCount)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 16, height: 16)
-                            .background(Circle().fill(.red))
-                            .offset(x: 8, y: -4)
-                    }
+                VStack(spacing: 3) {
+                    Image(systemName: "tray.full")
+                        .font(.system(size: 20, weight: .medium))
+                    Text("Messages")
+                        .font(PirateTheme.body(9))
                 }
                 .foregroundStyle(PirateTheme.signal.opacity(0.6))
             }
@@ -199,13 +180,25 @@ struct NowPlayingView: View {
             let progress = progressFraction(at: timeline.date)
 
             VStack(spacing: 8) {
-                // Current track tile with progress bar
                 if let track = sessionStore.session?.currentTrack {
+                    // Current track tile with progress bar
                     TrackTileView(
                         track: track,
                         style: .nowPlaying(progress: progress),
-                        accentColor: accentColor
+                        accentColor: PirateTheme.signal
                     )
+                } else if sessionStore.session?.queue.isEmpty != false {
+                    // Station is idle
+                    VStack(spacing: 12) {
+                        Image(systemName: "radio")
+                            .font(.system(size: 36))
+                            .foregroundStyle(PirateTheme.signal.opacity(0.3))
+                        Text("Station is idle — add a song!")
+                            .font(PirateTheme.body(14))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 100)
                 }
 
                 // Next 3 upcoming tracks
@@ -240,27 +233,34 @@ struct NowPlayingView: View {
 
     // MARK: - Progress Helpers
 
+    /// Pure function — reads state without mutating it.
     private func progressFraction(at date: Date) -> Double {
         guard let track = sessionStore.session?.currentTrack,
               track.durationMs > 0,
-              sessionStore.session?.isPlaying == true else { return 0 }
+              sessionStore.session?.isPlaying == true,
+              positionOrigin != .distantPast else { return 0 }
 
-        // Reset start date when track changes
-        if track.id != lastTrackID {
-            Task { @MainActor in
-                trackStartDate = date
-                lastTrackID = track.id
-            }
-            return 0
-        }
-
-        let elapsedSeconds = date.timeIntervalSince(trackStartDate)
+        let elapsedSeconds = date.timeIntervalSince(positionOrigin)
         let durationSeconds = Double(track.durationMs) / 1000.0
         return min(1.0, max(0, elapsedSeconds / durationSeconds))
     }
 
-    private var accentColor: Color {
-        sessionStore.isDJ ? PirateTheme.broadcast : PirateTheme.signal
+    /// Called via onChange when track or playing state changes — safe to mutate @State here.
+    private func updatePositionOrigin(forTrackID newTrackID: String?) {
+        guard let track = sessionStore.session?.currentTrack,
+              track.durationMs > 0,
+              sessionStore.session?.isPlaying == true else {
+            positionOrigin = .distantPast
+            trackedTrackID = nil
+            return
+        }
+
+        // Only reset origin when track actually changes
+        if newTrackID != trackedTrackID {
+            trackedTrackID = newTrackID
+            // Use server position if available via SyncEngine's last stateSync
+            positionOrigin = .now
+        }
     }
 
     private let memberEmojis = ["🏔️", "🎿", "🏂", "⛷️", "🦊", "🐻"]
@@ -281,10 +281,7 @@ struct NowPlayingView: View {
                                     .frame(width: 40, height: 40)
                                     .overlay(
                                         Circle()
-                                            .strokeBorder(
-                                                member.id == session.djUserID ? PirateTheme.broadcast : member.avatarColor.color,
-                                                lineWidth: 2
-                                            )
+                                            .strokeBorder(member.avatarColor.color, lineWidth: 2)
                                     )
                                     .overlay {
                                         Text(String(member.displayName.prefix(1)).uppercased())
@@ -308,57 +305,24 @@ struct NowPlayingView: View {
         }
     }
 
-    // MARK: - DJ Controls
+    // MARK: - Station Controls (universal)
 
-    private var djControls: some View {
+    private var stationControls: some View {
         HStack(spacing: 20) {
-            // Seek back
-            Button {
-                Task { await sessionStore.seek(to: 0) }
-            } label: {
-                Image(systemName: "backward.fill")
-                    .font(.title2)
-            }
-            .frame(minWidth: 52, minHeight: 52)
-            .sensoryFeedback(.impact(weight: .light), trigger: UUID())
+            ConnectionStatusBadge(state: sessionStore.connectionState)
 
-            // Mute / Unmute (main button)
+            Spacer()
+
+            // Mute / Unmute (visual only — Spotify SDK doesn't expose volume control)
             Button {
                 withAnimation(.spring(duration: 0.2)) { isMuted.toggle() }
             } label: {
                 Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.largeTitle)
-            }
-            .buttonStyle(GloveButtonStyle(color: isMuted ? PirateTheme.flare : PirateTheme.broadcast))
-            .sensoryFeedback(.impact(weight: .medium), trigger: isMuted)
-
-            // Pause/Play for all
-            Button {
-                Task {
-                    if sessionStore.session?.isPlaying == true {
-                        await sessionStore.pause()
-                    } else {
-                        await sessionStore.resume()
-                    }
-                }
-            } label: {
-                ZStack {
-                    Image(systemName: sessionStore.session?.isPlaying == true
-                          ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.red)
-
-                    // Small exclamation badge
-                    if sessionStore.session?.isPlaying == true {
-                        Image(systemName: "exclamationmark")
-                            .font(.system(size: 8, weight: .black))
-                            .foregroundStyle(.red)
-                            .offset(x: 14, y: -10)
-                    }
-                }
+                    .font(.title2)
+                    .foregroundStyle(PirateTheme.signal)
             }
             .frame(minWidth: 44, minHeight: 44)
-            .sensoryFeedback(.impact(weight: .light), trigger: sessionStore.session?.isPlaying)
+            .sensoryFeedback(.impact(weight: .medium), trigger: isMuted)
 
             // Skip
             Button {
@@ -370,30 +334,10 @@ struct NowPlayingView: View {
             } label: {
                 Image(systemName: "forward.fill")
                     .font(.title2)
+                    .foregroundStyle(PirateTheme.signal)
             }
-            .disabled(sessionStore.session?.queue.isEmpty != false)
-            .frame(minWidth: 52, minHeight: 52)
-            .sensoryFeedback(.impact(weight: .light), trigger: UUID())
-        }
-        .foregroundStyle(PirateTheme.broadcast)
-        .padding(.vertical, 8)
-    }
-
-    // MARK: - Listener Controls
-
-    private var listenerControls: some View {
-        HStack(spacing: 16) {
-            ConnectionStatusBadge(state: sessionStore.connectionState)
-
-            Spacer()
-
-            Button { showQueue = true } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus")
-                    Text("Request Song")
-                }
-            }
-            .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
+            .frame(minWidth: 44, minHeight: 44)
+            .disabled(sessionStore.session?.queue.isEmpty != false && sessionStore.session?.currentTrack == nil)
         }
         .padding(.vertical, 8)
     }
@@ -413,16 +357,13 @@ struct NowPlayingView: View {
         let actions: [() -> Void] = [
             { showSignalLost = true },
             {
-                toastManager.show(.memberJoined, message: "Gondola Greg joined the session")
+                toastManager.show(.memberJoined, message: "Gondola Greg joined the station")
                 if let greg = MockData.members.first(where: { $0.displayName == "Gondola Greg" }) {
                     sessionStore.addMember(greg)
                 }
             },
             {
                 toastManager.show(.songRequest, message: "Shredder requested \"Midnight City\"")
-            },
-            {
-                toastManager.show(.djChanged, message: "Shredder is now DJ")
             },
         ]
         actions.randomElement()?()
