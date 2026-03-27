@@ -42,9 +42,15 @@ struct SessionSnapshot: Codable, Sendable {
     let ntpAnchor: UInt64
     let playbackRate: Double
     let queue: [Track]
+    let members: [MemberSnapshot]
     let djUserID: UserID
     let epoch: UInt64
     let sequenceNumber: UInt64
+
+    struct MemberSnapshot: Codable, Sendable {
+        let userId: String
+        let displayName: String
+    }
 }
 
 typealias UserID = String

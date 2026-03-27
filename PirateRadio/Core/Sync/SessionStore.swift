@@ -249,6 +249,11 @@ final class SessionStore {
         case .queueUpdated(let tracks):
             print("[SessionStore] queueUpdated: \(tracks.count) tracks")
             session?.queue = tracks
+        case .membersSync(let memberSnapshots):
+            print("[SessionStore] membersSync: \(memberSnapshots.count) members")
+            session?.members = memberSnapshots.map { m in
+                Session.Member(id: m.userId, displayName: m.displayName, isConnected: true)
+            }
         case .anchorUpdated(let anchor, let offsetMs):
             currentAnchor = anchor
             clockOffsetMs = offsetMs

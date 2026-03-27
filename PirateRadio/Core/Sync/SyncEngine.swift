@@ -47,6 +47,7 @@ actor SyncEngine {
         case queueUpdated([Track])
         case memberJoined(UserID, String)
         case memberLeft(UserID)
+        case membersSync([SessionSnapshot.MemberSnapshot])
         case connectionStateChanged(ConnectionState)
         case syncStatus(SyncStatus)
         case anchorUpdated(NTPAnchoredPosition, clockOffsetMs: Int64)
@@ -97,15 +98,24 @@ actor SyncEngine {
         let leadTime: UInt64 = 1500 // ms
         let commitTime = now + leadTime
 
-        // Phase 1: PREPARE — tell everyone to pre-warm the track
-        let prepareMsg = SyncMessage(
-            id: UUID(),
-            type: .playPrepare(trackID: track.id, prepareDeadline: commitTime),
-            sequenceNumber: lastProcessedSeq + 1,
-            epoch: currentEpoch,
-            timestamp: now
-        )
-        try await transport.send(prepareMsg)
+        // Phase 1: PREPARE — send full track metadata so server stores it
+        let prepareEnvelope: [String: Any] = [
+            "type": "playPrepare",
+            "data": [
+                "trackId": track.id,
+                "track": [
+                    "id": track.id,
+                    "name": track.name,
+                    "artist": track.artist,
+                    "albumName": track.albumName,
+                    "albumArtURL": track.albumArtURL?.absoluteString ?? "",
+                    "durationMs": track.durationMs,
+                ] as [String: Any],
+                "prepareDeadline": commitTime,
+            ] as [String: Any],
+        ]
+        let prepareData = try JSONSerialization.data(withJSONObject: prepareEnvelope)
+        try await transport.sendRaw(prepareData)
 
         // Pre-warm locally
         preparedTrackID = track.id
@@ -117,7 +127,7 @@ actor SyncEngine {
         let commitNtp = clock.now() + 200 // tiny buffer for message transit
         let commitMsg = SyncMessage(
             id: UUID(),
-            type: .playCommit(trackID: track.id, startAtNtp: commitNtp, refSeq: prepareMsg.sequenceNumber),
+            type: .playCommit(trackID: track.id, startAtNtp: commitNtp, refSeq: lastProcessedSeq + 1),
             sequenceNumber: lastProcessedSeq + 2,
             epoch: currentEpoch,
             timestamp: clock.now()
@@ -396,11 +406,14 @@ actor SyncEngine {
 
         guard let trackID = snapshot.trackID else { return }
 
-        // Notify UI of track and queue — use full track from stateSync if available
+        // Notify UI of track, queue, and members
         let track = snapshot.currentTrack ?? Track(id: trackID, name: "", artist: "", albumName: "", albumArtURL: nil, durationMs: 0)
         onSessionUpdate?(.trackChanged(track))
         if !snapshot.queue.isEmpty {
             onSessionUpdate?(.queueUpdated(snapshot.queue))
+        }
+        if !snapshot.members.isEmpty {
+            onSessionUpdate?(.membersSync(snapshot.members))
         }
 
         let now = clock.now()

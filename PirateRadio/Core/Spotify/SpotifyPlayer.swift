@@ -66,9 +66,19 @@ final class SpotifyPlayer: NSObject, MusicSource {
     // MARK: - Connection
 
     /// Connect to the Spotify app. Call after init and when the app becomes active.
+    /// On first connection, this opens the Spotify app for authorization.
     func connect() {
         guard !appRemote.isConnected else { return }
+        // Try direct connect first (works if previously authorized)
         appRemote.connect()
+    }
+
+    /// Open the Spotify app for authorization. Call this if connect() fails
+    /// or on first launch to establish the App Remote connection.
+    func authorizeAndConnect() {
+        guard !appRemote.isConnected else { return }
+        // This opens Spotify app, which triggers a redirect back with auth params
+        appRemote.authorizeAndPlayURI("", asRadio: false, additionalScopes: nil)
     }
 
     /// Disconnect from the Spotify app. Call when the app resigns active.
@@ -81,7 +91,16 @@ final class SpotifyPlayer: NSObject, MusicSource {
     /// Handle the authorization URL returned by Spotify app.
     /// Returns true if this URL was handled by SPTAppRemote.
     func handleURL(_ url: URL) -> Bool {
-        appRemote.authorizationParameters(from: url) != nil
+        let params = appRemote.authorizationParameters(from: url)
+        if params != nil {
+            // Got auth params from Spotify — now connect
+            if let accessToken = params?[SPTAppRemoteAccessTokenKey] {
+                appRemote.connectionParameters.accessToken = accessToken
+            }
+            appRemote.connect()
+            return true
+        }
+        return false
     }
 
     // MARK: - MusicSource Protocol
@@ -148,7 +167,11 @@ final class SpotifyPlayer: NSObject, MusicSource {
 
     private func beginPlaybackSync(trackID: String, position: Duration) throws {
         guard appRemote.isConnected else {
-            throw PirateRadioError.notConnected
+            // Try to connect; the pending command will be queued
+            print("[SpotifyPlayer] Not connected, attempting to connect for playback")
+            authorizeAndConnect()
+            pendingCommand = .play(trackID: trackID, position: position)
+            return
         }
 
         switch state {
@@ -255,12 +278,16 @@ extension SpotifyPlayer: SPTAppRemoteDelegate {
                     print("[SpotifyPlayer] Failed to subscribe to player state: \(error)")
                 }
             })
+            // Process any queued play command
+            self.processPending()
         }
     }
 
     nonisolated func appRemote(_ appRemote: SPTAppRemote, didFailConnectionAttemptWithError error: Error?) {
         Task { @MainActor in
             print("[SpotifyPlayer] Connection failed: \(error?.localizedDescription ?? "unknown")")
+            // If direct connect fails, try opening Spotify for authorization
+            self.authorizeAndConnect()
         }
     }
 

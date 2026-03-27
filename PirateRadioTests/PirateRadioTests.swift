@@ -454,6 +454,7 @@ struct SyncMessageCodableTests {
             ntpAnchor: 4_000_000,
             playbackRate: 1.0,
             queue: [],
+            members: [],
             djUserID: "dj-user",
             epoch: 5,
             sequenceNumber: 100

@@ -122,6 +122,14 @@ extension ServerEnvelope {
         let queueArray = src["queue"]?.arrayValue ?? []
         let queueTracks = parseTracks(from: queueArray)
 
+        let membersArray = src["members"]?.arrayValue ?? []
+        let members = membersArray.compactMap { m -> SessionSnapshot.MemberSnapshot? in
+            guard let obj = m.objectValue,
+                  let userId = obj["userId"]?.stringValue else { return nil }
+            let displayName = obj["displayName"]?.stringValue ?? userId
+            return SessionSnapshot.MemberSnapshot(userId: userId, displayName: displayName)
+        }
+
         return SessionSnapshot(
             trackID: trackID,
             currentTrack: currentTrack,
@@ -129,6 +137,7 @@ extension ServerEnvelope {
             ntpAnchor: positionTimestamp,
             playbackRate: isPlaying ? 1.0 : 0.0,
             queue: queueTracks,
+            members: members,
             djUserID: djUserID,
             epoch: snapshotEpoch,
             sequenceNumber: sequenceNumber
