@@ -684,3 +684,308 @@ describe("WebSocket Sync Protocol", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Auto-Advance, Skip Fix, and Validation Tests
+// ---------------------------------------------------------------------------
+
+describe("Track Auto-Advance", () => {
+  before(async () => {
+    if (!serverProcess) {
+      await startServer();
+    }
+  });
+
+  after(() => {
+    stopServer();
+  });
+
+  it("auto-advances to next queued track when current track ends", async () => {
+    const djToken = await getToken(PORT, "auto_dj_1");
+    const session = await createSession(PORT, djToken);
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+
+    try {
+      const listenerToken = await getToken(PORT, "auto_listener_1");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        // Add a track to the queue with duration
+        djWs.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track: { id: "next-track", durationMs: 180000 }, nonce: "nonce-1" },
+        }));
+        await waitForMessage(listenerWs); // queueUpdate
+
+        // DJ plays a short track (800ms duration)
+        djWs.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "short-track", track: { id: "short-track", durationMs: 800 } },
+        }));
+        await waitForMessage(listenerWs); // playPrepare
+
+        djWs.send(JSON.stringify({
+          type: "playCommit",
+          data: { ntpTimestamp: Date.now(), positionMs: 0 },
+        }));
+        await waitForMessage(listenerWs); // playCommit
+
+        // Wait for auto-advance: 800ms track + 500ms grace + 1500ms lead
+        // Collect messages for up to 5 seconds
+        const msgs = [];
+        const collectMessages = new Promise((resolve) => {
+          const handler = (raw) => {
+            msgs.push(JSON.parse(raw.toString()));
+          };
+          listenerWs.on("message", handler);
+          setTimeout(() => {
+            listenerWs.off("message", handler);
+            resolve();
+          }, 4500);
+        });
+        await collectMessages;
+        const types = msgs.map((m) => m.type);
+
+        assert.ok(types.includes("playPrepare"), `should have playPrepare, got: ${types.join(", ")}`);
+        assert.ok(types.includes("playCommit"), `should have playCommit, got: ${types.join(", ")}`);
+
+        const prepare = msgs.find((m) => m.type === "playPrepare");
+        assert.equal(prepare.data.trackId, "next-track");
+        const commit = msgs.find((m) => m.type === "playCommit");
+        assert.equal(commit.data.trackId, "next-track");
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("pauses when track ends and queue is empty", async () => {
+    const djToken = await getToken(PORT, "auto_dj_2");
+    const session = await createSession(PORT, djToken);
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+
+    try {
+      const listenerToken = await getToken(PORT, "auto_listener_2");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        // DJ plays a short track with empty queue
+        djWs.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "only-track", track: { id: "only-track", durationMs: 800 } },
+        }));
+        await waitForMessage(listenerWs); // playPrepare
+
+        djWs.send(JSON.stringify({
+          type: "playCommit",
+          data: { ntpTimestamp: Date.now(), positionMs: 0 },
+        }));
+        await waitForMessage(listenerWs); // playCommit
+
+        // Wait for auto-advance to fire with empty queue → pause
+        const pauseMsg = await waitForMessage(listenerWs, 5000);
+        assert.equal(pauseMsg.type, "pause");
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("skip sends playPrepare AND playCommit for next track", async () => {
+    const djToken = await getToken(PORT, "skip_dj_1");
+    const session = await createSession(PORT, djToken);
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+
+    try {
+      const listenerToken = await getToken(PORT, "skip_listener_1");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        // Add a track to queue
+        djWs.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track: { id: "queued-1", durationMs: 180000 }, nonce: "skip-nonce-1" },
+        }));
+        await waitForMessage(listenerWs); // queueUpdate
+
+        // DJ skips to next track
+        djWs.send(JSON.stringify({ type: "skip", data: {} }));
+
+        // Collect 3 messages: playPrepare, queueUpdate, playCommit
+        const msg1 = await waitForMessage(listenerWs, 3000);
+        const msg2 = await waitForMessage(listenerWs, 3000);
+        const msg3 = await waitForMessage(listenerWs, 3000);
+        const msgs = [msg1, msg2, msg3];
+        const types = msgs.map((m) => m.type);
+
+        assert.ok(types.includes("playPrepare"), "should have playPrepare");
+        assert.ok(types.includes("queueUpdate"), "should have queueUpdate");
+        assert.ok(types.includes("playCommit"), "should have playCommit");
+
+        const prepare = msgs.find((m) => m.type === "playPrepare");
+        assert.equal(prepare.data.trackId, "queued-1");
+        const commit = msgs.find((m) => m.type === "playCommit");
+        assert.equal(commit.data.trackId, "queued-1");
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("skip with empty queue pauses playback", async () => {
+    const djToken = await getToken(PORT, "skip_dj_2");
+    const session = await createSession(PORT, djToken);
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+
+    try {
+      const listenerToken = await getToken(PORT, "skip_listener_2");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        // DJ skips with no queue
+        djWs.send(JSON.stringify({ type: "skip", data: {} }));
+
+        const pauseMsg = await waitForMessage(listenerWs, 3000);
+        assert.equal(pauseMsg.type, "pause");
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("includes trackDurationMs in session snapshot", async () => {
+    const djToken = await getToken(PORT, "snap_dj_1");
+    const session = await createSession(PORT, djToken);
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+
+    try {
+      // Play a track with duration
+      djWs.send(JSON.stringify({
+        type: "playPrepare",
+        data: { trackId: "snap-track", track: { id: "snap-track", durationMs: 240000 } },
+      }));
+
+      // Check snapshot via HTTP
+      const res = await request(PORT, "GET", `/sessions/${session.id}`, {
+        headers: { Authorization: `Bearer ${djToken}` },
+      });
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body.trackDurationMs, 240000);
+    } finally {
+      djWs.close();
+    }
+  });
+});
+
+describe("Message Validation", () => {
+  before(async () => {
+    if (!serverProcess) {
+      await startServer();
+    }
+  });
+
+  after(() => {
+    stopServer();
+  });
+
+  it("rejects playPrepare without trackId", async () => {
+    const djToken = await getToken(PORT, "val_dj_1");
+    const session = await createSession(PORT, djToken);
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+
+    try {
+      const listenerToken = await getToken(PORT, "val_listener_1");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        // Send playPrepare with missing trackId
+        djWs.send(JSON.stringify({
+          type: "playPrepare",
+          data: { track: { id: "test" } },
+        }));
+
+        // Listener should NOT receive this — wait and expect timeout
+        try {
+          await waitForMessage(listenerWs, 500);
+          assert.fail("Should not have received a message");
+        } catch (err) {
+          assert.ok(err.message.includes("Timed out"));
+        }
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("rejects unknown message types silently", async () => {
+    const djToken = await getToken(PORT, "val_dj_2");
+    const session = await createSession(PORT, djToken);
+    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
+
+    try {
+      const listenerToken = await getToken(PORT, "val_listener_2");
+      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
+
+      try {
+        await waitForMessage(djWs); // memberJoined
+
+        // Send unknown message type
+        djWs.send(JSON.stringify({
+          type: "foobar",
+          data: { whatever: true },
+        }));
+
+        // Listener should NOT receive anything
+        try {
+          await waitForMessage(listenerWs, 500);
+          assert.fail("Should not have received a message");
+        } catch (err) {
+          assert.ok(err.message.includes("Timed out"));
+        }
+      } finally {
+        listenerWs.close();
+      }
+    } finally {
+      djWs.close();
+    }
+  });
+
+  it("does not throttle ping messages", async () => {
+    const token = await getToken(PORT, "val_ping_1");
+    const session = await createSession(PORT, token);
+    const { ws } = await connectWebSocket(PORT, token, session.id);
+
+    try {
+      // Send two pings rapidly
+      ws.send(JSON.stringify({ type: "ping", data: { clientSendTime: 1 } }));
+      const pong1 = await waitForMessage(ws, 1000);
+      assert.equal(pong1.type, "pong");
+
+      ws.send(JSON.stringify({ type: "ping", data: { clientSendTime: 2 } }));
+      const pong2 = await waitForMessage(ws, 1000);
+      assert.equal(pong2.type, "pong");
+    } finally {
+      ws.close();
+    }
+  });
+});

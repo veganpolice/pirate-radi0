@@ -3,6 +3,12 @@ import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const monitorHTML = readFileSync(join(__dirname, "monitor.html"), "utf-8");
 
 // --- Configuration ---
 
@@ -16,6 +22,38 @@ const PING_INTERVAL_MS = 15_000;
 const PONG_TIMEOUT_MS = 5_000;
 const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const CODE_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const AUTO_ADVANCE_LEAD_MS = 1500; // gap between playPrepare and playCommit
+const TRACK_END_GRACE_MS = 500; // buffer after track duration before auto-advance
+const DJ_COMMAND_COOLDOWN_MS = 250; // minimum gap between DJ commands
+
+// --- Logging ---
+
+const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
+const LOG_LEVEL = LOG_LEVELS[process.env.LOG_LEVEL || "info"] ?? LOG_LEVELS.info;
+
+function log(level, event, data = {}) {
+  if (LOG_LEVELS[level] < LOG_LEVEL) return;
+  const entry = { ts: new Date().toISOString(), level, event, ...data };
+  console.log(JSON.stringify(entry));
+}
+
+// --- Message Schema Validation ---
+
+// playCommit excluded: it always follows playPrepare as a logical pair
+const DJ_COMMANDS_THROTTLED = new Set(["playPrepare", "pause", "resume", "seek", "skip"]);
+
+const MESSAGE_SCHEMAS = {
+  playPrepare: (data) => typeof data?.trackId === "string" && data.trackId.length > 0,
+  playCommit: () => true,
+  pause: () => true,
+  resume: () => true,
+  seek: (data) => typeof data?.positionMs === "number" && data.positionMs >= 0,
+  skip: () => true,
+  addToQueue: (data) => !!data?.track?.id && typeof data?.nonce === "string",
+  removeFromQueue: (data) => typeof data?.trackId === "string",
+  driftReport: () => true,
+  ping: () => true,
+};
 
 // --- In-Memory State ---
 
@@ -44,6 +82,10 @@ const joinAttemptLog = new Map();
  * @property {boolean} isPlaying
  * @property {number} positionMs - NTP-anchored position
  * @property {number} positionTimestamp - NTP time when position was recorded
+ * @property {number|null} trackDurationMs - duration of current track
+ * @property {ReturnType<typeof setTimeout>|null} trackEndTimer - auto-advance timer
+ * @property {string|null} lastPrepareTrackId - dedup rapid playPrepare
+ * @property {number} lastCommandTime - throttle DJ commands
  * @property {Array} queue
  * @property {number} lastActivity
  * @property {number} codeCreatedAt
@@ -66,6 +108,39 @@ app.use(express.json());
 // Health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", sessions: sessions.size });
+});
+
+// Admin: list all sessions (for monitoring dashboard)
+app.get("/admin/sessions", (_req, res) => {
+  const result = [];
+  for (const session of sessions.values()) {
+    result.push({
+      id: session.id,
+      joinCode: session.joinCode,
+      creatorId: session.creatorId,
+      djUserId: session.djUserId,
+      members: Array.from(session.members.values()).map((m) => ({
+        userId: m.userId,
+        displayName: m.displayName,
+        joinedAt: m.joinedAt,
+        alive: m.alive,
+      })),
+      epoch: session.epoch,
+      sequence: session.sequence,
+      currentTrack: session.currentTrack,
+      isPlaying: session.isPlaying,
+      positionMs: session.positionMs,
+      positionTimestamp: session.positionTimestamp,
+      trackDurationMs: session.trackDurationMs,
+      queue: session.queue,
+    });
+  }
+  res.json(result);
+});
+
+// Monitoring dashboard
+app.get("/monitor", (_req, res) => {
+  res.type("html").send(monitorHTML);
 });
 
 // Authenticate: client sends Spotify user info, gets a JWT
@@ -94,6 +169,8 @@ app.post("/sessions", authenticateHTTP, (req, res) => {
 
   const session = createSession(userId);
   recordRateLimit(sessionCreationLog, userId);
+
+  log("info", "session.created", { sessionId: session.id, creatorId: userId });
 
   res.status(201).json({
     id: session.id,
@@ -228,6 +305,8 @@ wss.on("connection", (ws) => {
   });
   session.lastActivity = Date.now();
 
+  log("info", "member.joined", { sessionId, userId });
+
   // Send session snapshot to joiner
   ws.send(JSON.stringify({ type: "stateSync", data: sessionSnapshot(session) }));
 
@@ -256,6 +335,9 @@ wss.on("connection", (ws) => {
     const member = session.members.get(userId);
     if (member?.ws === ws) {
       session.members.delete(userId);
+
+      log("info", "member.left", { sessionId, userId });
+
       broadcastToSession(session, {
         type: "memberLeft",
         data: { userId },
@@ -294,14 +376,50 @@ wss.on("connection", (ws) => {
 function handleMessage(session, senderId, msg) {
   session.lastActivity = Date.now();
 
+  // Schema validation
+  const validator = MESSAGE_SCHEMAS[msg.type];
+  if (!validator) {
+    log("warn", "msg.unknownType", { sessionId: session.id, senderId, type: msg.type });
+    return;
+  }
+  if (!validator(msg.data)) {
+    log("warn", "msg.invalidSchema", { sessionId: session.id, senderId, type: msg.type });
+    return;
+  }
+
+  // DJ command throttle
+  if (DJ_COMMANDS_THROTTLED.has(msg.type) && senderId === session.djUserId) {
+    const now = Date.now();
+    if (now - session.lastCommandTime < DJ_COMMAND_COOLDOWN_MS) {
+      log("warn", "msg.throttled", { sessionId: session.id, type: msg.type });
+      return;
+    }
+    session.lastCommandTime = now;
+  }
+
+  log("debug", "msg.received", { sessionId: session.id, senderId, type: msg.type });
+
   switch (msg.type) {
     case "playPrepare": {
-      if (senderId !== session.djUserId) return; // only DJ
-      if (!msg.data?.trackId) return;
+      if (senderId !== session.djUserId) {
+        log("warn", "msg.rejected.notDJ", { sessionId: session.id, senderId, type: msg.type });
+        return;
+      }
+
+      // Dedup: ignore identical playPrepare without intervening playCommit
+      if (msg.data.trackId === session.lastPrepareTrackId) {
+        log("warn", "msg.duplicatePrepare", { sessionId: session.id, trackId: msg.data.trackId });
+        return;
+      }
 
       session.currentTrack = msg.data.track || { id: msg.data.trackId };
+      session.trackDurationMs = msg.data.track?.durationMs || msg.data.durationMs || null;
+      session.lastPrepareTrackId = msg.data.trackId;
       session.epoch++;
       session.sequence++;
+
+      // Cancel any pending auto-advance
+      clearTrackEndTimer(session);
 
       broadcastToSession(session, {
         type: "playPrepare",
@@ -319,6 +437,7 @@ function handleMessage(session, senderId, msg) {
       session.isPlaying = true;
       session.positionMs = msg.data?.positionMs || 0;
       session.positionTimestamp = msg.data?.ntpTimestamp || Date.now();
+      session.lastPrepareTrackId = null; // allow future prepares for same track
       session.sequence++;
 
       broadcastToSession(session, {
@@ -328,6 +447,9 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+
+      // Schedule auto-advance at end of track
+      scheduleTrackEnd(session);
       break;
     }
 
@@ -342,6 +464,8 @@ function handleMessage(session, senderId, msg) {
         session.positionTimestamp = Date.now();
       }
       session.sequence++;
+
+      clearTrackEndTimer(session);
 
       broadcastToSession(session, {
         type: "pause",
@@ -371,6 +495,9 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+
+      // Reschedule auto-advance
+      scheduleTrackEnd(session);
       break;
     }
 
@@ -388,29 +515,19 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+
+      // Reschedule auto-advance from new position
+      if (session.isPlaying) {
+        scheduleTrackEnd(session);
+      }
       break;
     }
 
     case "skip": {
       if (senderId !== session.djUserId) return;
 
-      const nextTrack = session.queue.shift();
-      if (nextTrack) {
-        session.currentTrack = nextTrack;
-        session.positionMs = 0;
-        session.positionTimestamp = Date.now();
-        session.isPlaying = true;
-        session.epoch++;
-        session.sequence++;
-
-        broadcastToSession(session, {
-          type: "playPrepare",
-          data: { trackId: nextTrack.id, track: nextTrack },
-          epoch: session.epoch,
-          seq: session.sequence,
-          timestamp: Date.now(),
-        });
-      }
+      clearTrackEndTimer(session);
+      autoAdvance(session);
       break;
     }
 
@@ -480,6 +597,132 @@ function handleMessage(session, senderId, msg) {
   }
 }
 
+// --- Track End Timer & Auto-Advance ---
+
+function clearTrackEndTimer(session) {
+  if (session.trackEndTimer) {
+    clearTimeout(session.trackEndTimer);
+    session.trackEndTimer = null;
+  }
+}
+
+function scheduleTrackEnd(session) {
+  clearTrackEndTimer(session);
+
+  if (!session.trackDurationMs || session.trackDurationMs <= 0) return;
+  if (!session.isPlaying) return;
+
+  const remainingMs = session.trackDurationMs - (session.positionMs || 0);
+  if (remainingMs <= 0) return;
+
+  session.trackEndTimer = setTimeout(() => {
+    session.trackEndTimer = null;
+    if (!sessions.has(session.id) || !session.isPlaying) return;
+
+    log("info", "track.ended", {
+      sessionId: session.id,
+      trackId: session.currentTrack?.id,
+      queueLength: session.queue.length,
+    });
+
+    autoAdvance(session);
+  }, remainingMs + TRACK_END_GRACE_MS);
+
+  log("info", "track.endScheduled", {
+    sessionId: session.id,
+    trackId: session.currentTrack?.id,
+    remainingMs,
+  });
+}
+
+function autoAdvance(session) {
+  if (!sessions.has(session.id)) return;
+
+  const nextTrack = session.queue.shift();
+
+  if (!nextTrack) {
+    // Queue empty — stop playback
+    session.isPlaying = false;
+    session.sequence++;
+
+    log("info", "track.queueEmpty", { sessionId: session.id });
+
+    broadcastToSession(session, {
+      type: "pause",
+      data: { positionMs: 0, ntpTimestamp: Date.now() },
+      epoch: session.epoch,
+      seq: session.sequence,
+      timestamp: Date.now(),
+    });
+    return;
+  }
+
+  // Prepare next track
+  session.currentTrack = nextTrack;
+  session.trackDurationMs = nextTrack.durationMs || null;
+  session.positionMs = 0;
+  session.positionTimestamp = Date.now();
+  session.lastPrepareTrackId = null;
+  session.epoch++;
+  session.sequence++;
+
+  const commitEpoch = session.epoch; // capture for stale-check
+
+  log("info", "track.autoAdvance", {
+    sessionId: session.id,
+    trackId: nextTrack.id,
+    durationMs: session.trackDurationMs,
+  });
+
+  broadcastToSession(session, {
+    type: "playPrepare",
+    data: { trackId: nextTrack.id, track: nextTrack },
+    epoch: session.epoch,
+    seq: session.sequence,
+    timestamp: Date.now(),
+  });
+
+  // Also send queueUpdate so clients see the queue shrink
+  session.sequence++;
+  broadcastToSession(session, {
+    type: "queueUpdate",
+    data: { queue: session.queue },
+    epoch: session.epoch,
+    seq: session.sequence,
+    timestamp: Date.now(),
+  });
+
+  // Delayed playCommit after lead time
+  setTimeout(() => {
+    if (!sessions.has(session.id)) return;
+    // If DJ took action in the meantime, epoch will have changed — abort
+    if (session.epoch !== commitEpoch) {
+      log("info", "track.autoCommitAborted", { sessionId: session.id, reason: "epoch changed" });
+      return;
+    }
+
+    session.isPlaying = true;
+    session.positionMs = 0;
+    session.positionTimestamp = Date.now();
+    session.sequence++;
+
+    broadcastToSession(session, {
+      type: "playCommit",
+      data: {
+        trackId: nextTrack.id,
+        ntpTimestamp: Date.now(),
+        positionMs: 0,
+      },
+      epoch: session.epoch,
+      seq: session.sequence,
+      timestamp: Date.now(),
+    });
+
+    // Schedule end of this track
+    scheduleTrackEnd(session);
+  }, AUTO_ADVANCE_LEAD_MS);
+}
+
 // --- Helpers ---
 
 function createSession(creatorId) {
@@ -498,6 +741,10 @@ function createSession(creatorId) {
     isPlaying: false,
     positionMs: 0,
     positionTimestamp: 0,
+    trackDurationMs: null,
+    trackEndTimer: null,
+    lastPrepareTrackId: null,
+    lastCommandTime: 0,
     queue: [],
     lastActivity: Date.now(),
     codeCreatedAt: Date.now(),
@@ -511,8 +758,10 @@ function createSession(creatorId) {
 function destroySession(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) return;
+  clearTrackEndTimer(session);
   codeIndex.delete(session.joinCode);
   sessions.delete(sessionId);
+  log("info", "session.destroyed", { sessionId });
 }
 
 function generateJoinCode() {
@@ -539,18 +788,22 @@ function sessionSnapshot(session) {
     isPlaying: session.isPlaying,
     positionMs: session.positionMs,
     positionTimestamp: session.positionTimestamp,
+    trackDurationMs: session.trackDurationMs,
     queue: session.queue,
   };
 }
 
 function broadcastToSession(session, message, excludeUserId = null) {
   const payload = JSON.stringify(message);
+  let count = 0;
   for (const [userId, member] of session.members) {
     if (userId === excludeUserId) continue;
     if (member.ws.readyState === 1) {
       member.ws.send(payload);
+      count++;
     }
   }
+  log("debug", "msg.broadcast", { sessionId: session.id, type: message.type, recipients: count });
 }
 
 function authenticateHTTP(req, res, next) {
@@ -598,6 +851,7 @@ setInterval(() => {
     // Ping all members
     for (const [userId, member] of session.members) {
       if (!member.alive) {
+        log("warn", "member.pingTimeout", { sessionId, userId });
         member.ws.terminate();
         session.members.delete(userId);
         broadcastToSession(session, {
@@ -639,4 +893,5 @@ setInterval(() => {
 
 server.listen(PORT, () => {
   console.log(`[PirateRadio] Server listening on port ${PORT}`);
+  log("info", "server.started", { port: PORT });
 });
