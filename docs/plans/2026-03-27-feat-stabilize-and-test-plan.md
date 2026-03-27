@@ -228,18 +228,18 @@ Not a "phase" — just run this when TestFlighting:
 ## Acceptance Criteria
 
 ### Phase A (Fix + Test)
-- [ ] `SyncEngine.stop()` cancels all spawned tasks
-- [ ] Queue advancement is server-authoritative only
-- [ ] `djPlay()` increments seq before the sleep, not after
-- [ ] SyncEngine has 11 unit tests passing
-- [ ] SessionStore has 3 state logic tests passing
-- [ ] WebSocketTransport has 4 smoke tests passing
-- [ ] Server has 5 new tests passing
-- [ ] All tests pass: `xcodebuild test` and `npm test`
+- [x] `SyncEngine.stop()` cancels all spawned tasks
+- [x] Queue advancement is server-authoritative only
+- [x] `djPlay()` increments seq before the sleep, not after
+- [x] SyncEngine has 11 unit tests passing
+- [x] SessionStore has 3 state logic tests passing
+- [x] WebSocketTransport has 4 smoke tests passing
+- [x] Server has 5 new tests passing
+- [x] All tests pass: `xcodebuild test` and `npm test`
 
 ### Phase B (CI)
-- [ ] Push to main / PR triggers both test suites
-- [ ] Branch protection requires passing checks
+- [x] Push to main / PR triggers both test suites
+- [ ] Branch protection requires passing checks (enable after first green run)
 
 ---
 
