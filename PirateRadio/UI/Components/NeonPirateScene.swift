@@ -24,9 +24,8 @@ struct NeonPirateScene: View {
                     let isDJ = member.id == djUserID
                     let nonDJIndex = members.filter { $0.id != djUserID }.firstIndex(where: { $0.id == member.id })
                     let nonDJCount = max(members.filter { $0.id != djUserID }.count, 1)
-                    let memberColor = colorForMember(member.id)
                     SailingShip(
-                        color: memberColor,
+                        color: member.avatarColor.color,
                         cycleOffset: isDJ ? 0 : spacedOffset(index: nonDJIndex ?? 0, total: nonDJCount, id: member.id),
                         cycleDuration: stableSpeed(for: member.id),
                         sceneWidth: w,
@@ -51,28 +50,25 @@ struct NeonPirateScene: View {
         }
     }
 
-    private func colorForMember(_ id: String) -> Color {
-        let hash = id.utf8.reduce(0) { ($0 &+ UInt64($1)) &* 31 }
-        let hue = Double(hash % 360) / 360.0
-        return Color(hue: hue, saturation: 0.8, brightness: 1.0)
-    }
-
+    /// Evenly space ships across the cycle, with a small deterministic jitter per ship.
     private func spacedOffset(index: Int, total: Int, id: String) -> Double {
-        let evenSpacing = Double(index + 1) / Double(total + 1)
+        let evenSpacing = Double(index + 1) / Double(total + 1) // e.g. 1/4, 2/4, 3/4 for 3 ships
         let hash = id.utf8.reduce(0) { ($0 &+ UInt64($1)) &* 31 }
-        let jitter = (Double(hash % 100) / 100.0 - 0.5) * 0.08
-        return min(max(evenSpacing + jitter, 0.05), 0.95)
+        let jitter = (Double(hash % 100) / 100.0 - 0.5) * 0.08 // ±4% wobble
+        return (evenSpacing + jitter).clamped(to: 0.05...0.95)
     }
 
+    /// Deterministic speed (14...22s) so each ship sails at a slightly different pace.
     private func stableSpeed(for id: String) -> Double {
         let hash = id.utf8.reduce(0) { ($0 &+ UInt64($1)) &* 37 }
-        return 14.0 + Double(hash % 800) / 100.0
+        return 14.0 + Double(hash % 800) / 100.0  // 14...22 seconds
     }
 
     // MARK: - Mountains
 
     private func mountains(w: CGFloat, h: CGFloat) -> some View {
         ZStack {
+            // Back range — tall peaks
             Path { p in
                 p.move(to: CGPoint(x: 0, y: h * 0.75))
                 p.addLine(to: CGPoint(x: w * 0.10, y: h * 0.10))
@@ -89,6 +85,7 @@ struct NeonPirateScene: View {
             .fill(color.opacity(0.03))
             .stroke(color.opacity(0.12), lineWidth: 0.5)
 
+            // Front range — slightly shorter but still prominent
             Path { p in
                 p.move(to: CGPoint(x: 0, y: h * 0.75))
                 p.addLine(to: CGPoint(x: w * 0.07, y: h * 0.30))
@@ -111,6 +108,7 @@ struct NeonPirateScene: View {
 
     private func waterLine(w: CGFloat, h: CGFloat) -> some View {
         Path { p in
+            p.move(to: CGPoint(x: 0, y: h * 0.72))
             let segments = 12
             for i in 0...segments {
                 let x = w * CGFloat(i) / CGFloat(segments)
@@ -131,10 +129,11 @@ struct NeonPirateScene: View {
 
 // MARK: - Individual Sailing Ship
 
+/// A single ship that sails across on a cycle, offset by `cycleOffset`.
 private struct SailingShip: View {
     let color: Color
-    let cycleOffset: Double
-    let cycleDuration: Double
+    let cycleOffset: Double   // 0...1 — where in the cycle this ship starts
+    let cycleDuration: Double // seconds for one crossing
     let sceneWidth: CGFloat
     let bobPhase: Bool
     let sailPulse: Bool
@@ -221,5 +220,11 @@ private struct SailingShip: View {
             )), with: .color(c.opacity(0.4)))
         }
         .shadow(color: color.opacity(sailPulse ? 0.5 : 0.2), radius: 4)
+    }
+}
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }

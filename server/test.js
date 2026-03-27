@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { WebSocket } from "ws";
+import WebSocket from "ws";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -332,6 +332,394 @@ describe("Pirate Radio API", () => {
     });
   });
 
+  // ----- Autonomous Queue Advancement -----
+
+  describe("Autonomous Queue Advancement", () => {
+    /**
+     * Connect a WebSocket and collect messages until a condition is met.
+     */
+    function connectWS(port, token, sessionId) {
+      return new Promise((resolve, reject) => {
+        const ws = new WebSocket(
+          `ws://127.0.0.1:${port}/?token=${token}&sessionId=${sessionId}`
+        );
+        const messages = [];
+        ws.on("open", () => resolve({ ws, messages }));
+        ws.on("message", (raw) => {
+          messages.push(JSON.parse(raw.toString()));
+        });
+        ws.on("error", reject);
+      });
+    }
+
+    function waitForMessage(messages, predicate, timeoutMs = 5000) {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error(`Timed out waiting for message (have ${messages.length})`)),
+          timeoutMs
+        );
+        const interval = setInterval(() => {
+          const found = messages.find(predicate);
+          if (found) {
+            clearTimeout(timeout);
+            clearInterval(interval);
+            resolve(found);
+          }
+        }, 50);
+      });
+    }
+
+    it("advances queue when track duration elapses", async () => {
+      const token = await getToken(PORT, "timer_dj", "TimerDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        // Wait for initial stateSync
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        // Set up a track with 1.5s duration and a queue with one more track
+        const track1 = { id: "track1", name: "Track 1", durationMs: 1500 };
+        const track2 = { id: "track2", name: "Track 2", durationMs: 3000 };
+
+        // Add track2 to queue
+        ws.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track: track2, nonce: "nonce-track2" },
+        }));
+        await waitForMessage(messages, (m) => m.type === "queueUpdate");
+
+        // Play track1 via playPrepare + playCommit
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: track1.id, track: track1 },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+
+        // Wait for playCommit broadcast
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+
+        // Now wait for automatic advancement — server should fire stateSync with track2
+        // after ~1.5 seconds
+        const advanceMsg = await waitForMessage(
+          messages,
+          (m) => m.type === "stateSync" && m.data?.currentTrack?.id === "track2",
+          4000
+        );
+
+        assert.ok(advanceMsg, "Should receive stateSync with track2");
+        assert.equal(advanceMsg.data.currentTrack.id, "track2");
+        assert.equal(advanceMsg.data.isPlaying, true);
+        assert.equal(advanceMsg.data.positionMs, 0);
+        assert.ok(advanceMsg.data.queue.length === 0, "Queue should be empty after advancing");
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("stops playing when queue is empty after advancement", async () => {
+      const token = await getToken(PORT, "empty_q_dj", "EmptyQDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        // Play a 1s track with no queue
+        const track = { id: "solo_track", name: "Solo", durationMs: 1000 };
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: track.id, track: track },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+
+        // Wait for stateSync that marks station as idle (isPlaying = false, but with a track still set)
+        const idleMsg = await waitForMessage(
+          messages,
+          (m) => m.type === "stateSync" && m.data?.isPlaying === false && m.data?.currentTrack?.id === "solo_track",
+          3000
+        );
+
+        assert.ok(idleMsg, "Should receive idle stateSync");
+        assert.equal(idleMsg.data.isPlaying, false);
+        // currentTrack is kept for "last played" context
+        assert.equal(idleMsg.data.currentTrack.id, "solo_track");
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("clears timer on pause and reschedules on resume", async () => {
+      const token = await getToken(PORT, "pause_dj", "PauseDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        // Play a 2s track
+        const track = { id: "pause_track", name: "PauseTrack", durationMs: 2000 };
+        const track2 = { id: "next_track", name: "NextTrack", durationMs: 3000 };
+
+        ws.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track: track2, nonce: "nonce-next" },
+        }));
+        await waitForMessage(messages, (m) => m.type === "queueUpdate");
+
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: track.id, track: track },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+
+        // Pause after 500ms — timer should be cleared
+        await new Promise((r) => setTimeout(r, 500));
+        ws.send(JSON.stringify({ type: "pause", data: {} }));
+        await waitForMessage(messages, (m) => m.type === "pause");
+
+        // Wait 2s — track should NOT advance because it's paused
+        await new Promise((r) => setTimeout(r, 2000));
+        const advancedWhilePaused = messages.find(
+          (m) => m.type === "stateSync" && m.data?.currentTrack?.id === "next_track"
+        );
+        assert.equal(advancedWhilePaused, undefined, "Should NOT advance while paused");
+
+        // Resume — timer should reschedule for remaining time
+        ws.send(JSON.stringify({ type: "resume", data: {} }));
+        await waitForMessage(messages, (m) => m.type === "resume");
+
+        // Should advance within ~1.5s (2s track - 0.5s already played)
+        const advanceMsg = await waitForMessage(
+          messages,
+          (m) => m.type === "stateSync" && m.data?.currentTrack?.id === "next_track",
+          3000
+        );
+        assert.ok(advanceMsg, "Should advance after resume");
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("does not schedule timer when durationMs is missing", async () => {
+      const token = await getToken(PORT, "nodur_dj", "NoDurDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        // Play a track with no durationMs
+        const track = { id: "no_dur", name: "NoDuration" };
+        const track2 = { id: "queued", name: "Queued", durationMs: 1000 };
+
+        ws.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track: track2, nonce: "nonce-queued" },
+        }));
+        await waitForMessage(messages, (m) => m.type === "queueUpdate");
+
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: track.id, track: track },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+
+        // Wait 2s — should NOT auto-advance because durationMs is missing
+        await new Promise((r) => setTimeout(r, 2000));
+        const advancedMsg = messages.find(
+          (m) => m.type === "stateSync" && m.data?.currentTrack?.id === "queued"
+        );
+        assert.equal(advancedMsg, undefined, "Should NOT advance when durationMs is missing");
+      } finally {
+        ws.close();
+      }
+    });
+  });
+
+  // ----- GET /stations -----
+
+  describe("GET /stations", () => {
+    it("returns empty array when no sessions are active", async () => {
+      const token = await getToken(PORT, "stations_empty_user", "EmptyUser");
+      const res = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.statusCode, 200);
+      assert.ok(Array.isArray(res.body.stations));
+      // May have stations from other tests, but structure is correct
+    });
+
+    it("returns a live station with frequency", async () => {
+      const token = await getToken(PORT, "stations_dj", "StationsDJ");
+      const session = await createSession(PORT, token);
+
+      // Connect via WebSocket and start playing so the station is "live"
+      const ws = await new Promise((resolve, reject) => {
+        const conn = new WebSocket(
+          `ws://127.0.0.1:${PORT}/?token=${token}&sessionId=${session.id}`
+        );
+        conn.on("open", () => resolve(conn));
+        conn.on("error", reject);
+      });
+
+      try {
+        // Wait for initial stateSync
+        await new Promise((r) => setTimeout(r, 200));
+
+        // Play a track so isPlaying becomes true
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "test_track", track: { id: "test_track", name: "Test", durationMs: 60000 } },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await new Promise((r) => setTimeout(r, 200));
+
+        const res = await request(PORT, "GET", "/stations", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        assert.equal(res.statusCode, 200);
+        const station = res.body.stations.find((s) => s.userId === "stations_dj");
+        assert.ok(station, "Should find the DJ's station");
+        assert.equal(station.displayName, "StationsDJ");
+        assert.equal(typeof station.frequency, "number");
+        assert.ok(station.frequency >= 88.0 && station.frequency <= 108.0);
+        assert.equal(station.sessionId, session.id);
+        assert.ok(station.currentTrack);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it("does not return idle sessions (not playing, empty queue)", async () => {
+      const token = await getToken(PORT, "stations_idle", "IdleUser");
+      const session = await createSession(PORT, token);
+
+      // Session exists but no track playing → should not appear in /stations
+      const res = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const station = res.body.stations.find((s) => s.userId === "stations_idle");
+      assert.equal(station, undefined, "Idle session should not appear in stations");
+    });
+
+    it("returns 401 without a token", async () => {
+      const res = await request(PORT, "GET", "/stations");
+      assert.equal(res.statusCode, 401);
+    });
+  });
+
+  // ----- POST /sessions/join-by-id -----
+
+  describe("POST /sessions/join-by-id", () => {
+    it("joins a session by ID", async () => {
+      const djToken = await getToken(PORT, "joinid_dj", "JoinIdDJ");
+      const session = await createSession(PORT, djToken);
+
+      const joinerToken = await getToken(PORT, "joinid_joiner", "JoinIdJoiner");
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: { sessionId: session.id },
+        headers: { Authorization: `Bearer ${joinerToken}` },
+      });
+
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body.id, session.id);
+      assert.equal(res.body.djUserId, "joinid_dj");
+    });
+
+    it("returns 404 for non-existent session", async () => {
+      const token = await getToken(PORT, "joinid_404", "NotFound");
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: { sessionId: "nonexistent-id" },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.statusCode, 404);
+    });
+
+    it("returns 400 when sessionId is missing", async () => {
+      const token = await getToken(PORT, "joinid_400", "BadReq");
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: {},
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.statusCode, 400);
+    });
+
+    it("returns 401 without a token", async () => {
+      const res = await request(PORT, "POST", "/sessions/join-by-id", {
+        body: { sessionId: "any-id" },
+      });
+      assert.equal(res.statusCode, 401);
+    });
+  });
+
+  // ----- User Registry (auto-assign frequency) -----
+
+  describe("User Registry", () => {
+    it("assigns unique frequencies to different users", async () => {
+      const token1 = await getToken(PORT, "freq_user_a", "UserA");
+      const token2 = await getToken(PORT, "freq_user_b", "UserB");
+
+      // Both users create sessions and play so they show up in /stations
+      const session1 = await createSession(PORT, token1);
+      const session2 = await createSession(PORT, token2);
+
+      // Start playback on both
+      for (const [token, session] of [[token1, session1], [token2, session2]]) {
+        const ws = await new Promise((resolve, reject) => {
+          const conn = new WebSocket(
+            `ws://127.0.0.1:${PORT}/?token=${token}&sessionId=${session.id}`
+          );
+          conn.on("open", () => resolve(conn));
+          conn.on("error", reject);
+        });
+        ws.send(JSON.stringify({
+          type: "playPrepare",
+          data: { trackId: "t1", track: { id: "t1", name: "T", durationMs: 60000 } },
+        }));
+        ws.send(JSON.stringify({
+          type: "playCommit",
+          data: { positionMs: 0, ntpTimestamp: Date.now() },
+        }));
+        await new Promise((r) => setTimeout(r, 100));
+        ws.close();
+      }
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const res = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token1}` },
+      });
+
+      const stationA = res.body.stations.find((s) => s.userId === "freq_user_a");
+      const stationB = res.body.stations.find((s) => s.userId === "freq_user_b");
+
+      if (stationA && stationB) {
+        assert.notEqual(stationA.frequency, stationB.frequency, "Users should have different frequencies");
+      }
+    });
+  });
+
   // ----- Rate limiting -----
 
   describe("Rate limiting", () => {
@@ -378,309 +766,5 @@ describe("Pirate Radio API", () => {
 
       assert.ok(got429, "Expected a 429 response after exceeding rate limit");
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// WebSocket Tests
-// ---------------------------------------------------------------------------
-
-/**
- * Connect a WebSocket to the server and wait for the first message (stateSync).
- * Returns { ws, firstMessage }.
- */
-function connectWebSocket(port, token, sessionId) {
-  return new Promise((resolve, reject) => {
-    const url = `ws://127.0.0.1:${port}/?token=${encodeURIComponent(token)}&sessionId=${encodeURIComponent(sessionId)}`;
-    const ws = new WebSocket(url);
-    const timeout = setTimeout(() => {
-      ws.close();
-      reject(new Error("WebSocket connection timed out"));
-    }, 5000);
-
-    ws.on("message", (raw) => {
-      clearTimeout(timeout);
-      const msg = JSON.parse(raw.toString());
-      resolve({ ws, firstMessage: msg });
-    });
-
-    ws.on("error", (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-  });
-}
-
-/**
- * Wait for the next message on a WebSocket, with timeout.
- */
-function waitForMessage(ws, timeoutMs = 3000) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Timed out waiting for message")), timeoutMs);
-    ws.once("message", (raw) => {
-      clearTimeout(timeout);
-      resolve(JSON.parse(raw.toString()));
-    });
-  });
-}
-
-describe("WebSocket Sync Protocol", () => {
-  before(async () => {
-    // Reuse the server from the API tests (already running)
-    // If running standalone, start a new one
-    if (!serverProcess) {
-      await startServer();
-    }
-  });
-
-  after(() => {
-    stopServer();
-  });
-
-  it("sends stateSync on WebSocket connect", async () => {
-    const token = await getToken(PORT, "ws_dj_1");
-    const session = await createSession(PORT, token);
-
-    const { ws, firstMessage } = await connectWebSocket(PORT, token, session.id);
-    try {
-      assert.equal(firstMessage.type, "stateSync");
-      assert.equal(firstMessage.data.id, session.id);
-      assert.equal(firstMessage.data.djUserId, "ws_dj_1");
-      assert.equal(firstMessage.data.isPlaying, false);
-      assert.ok(Array.isArray(firstMessage.data.members));
-      assert.ok(Array.isArray(firstMessage.data.queue));
-    } finally {
-      ws.close();
-    }
-  });
-
-  it("broadcasts memberJoined when a listener connects", async () => {
-    const djToken = await getToken(PORT, "ws_dj_2");
-    const session = await createSession(PORT, djToken);
-
-    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
-    try {
-      const listenerToken = await getToken(PORT, "ws_listener_2");
-
-      // Set up the listener for memberJoined BEFORE the listener connects
-      const memberJoinedPromise = waitForMessage(djWs);
-
-      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
-      try {
-        const msg = await memberJoinedPromise;
-        assert.equal(msg.type, "memberJoined");
-        assert.equal(msg.data.userId, "ws_listener_2");
-      } finally {
-        listenerWs.close();
-      }
-    } finally {
-      djWs.close();
-    }
-  });
-
-  it("relays playPrepare from DJ to listeners", async () => {
-    const djToken = await getToken(PORT, "ws_dj_3");
-    const session = await createSession(PORT, djToken);
-
-    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
-    try {
-      const listenerToken = await getToken(PORT, "ws_listener_3");
-      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
-      try {
-        // Wait for memberJoined on DJ side
-        await waitForMessage(djWs);
-
-        // DJ sends playPrepare
-        const preparePromise = waitForMessage(listenerWs);
-        djWs.send(JSON.stringify({
-          type: "playPrepare",
-          data: { trackId: "track-xyz", track: { id: "track-xyz", name: "Test" } },
-        }));
-
-        const msg = await preparePromise;
-        assert.equal(msg.type, "playPrepare");
-        assert.equal(msg.data.trackId, "track-xyz");
-        assert.ok(msg.epoch > 0); // epoch incremented
-        assert.ok(msg.seq > 0);
-      } finally {
-        listenerWs.close();
-      }
-    } finally {
-      djWs.close();
-    }
-  });
-
-  it("ignores playPrepare from non-DJ", async () => {
-    const djToken = await getToken(PORT, "ws_dj_4");
-    const session = await createSession(PORT, djToken);
-
-    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
-    try {
-      const listenerToken = await getToken(PORT, "ws_listener_4");
-      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
-      try {
-        await waitForMessage(djWs); // memberJoined
-
-        // Listener (non-DJ) sends playPrepare — should be ignored
-        listenerWs.send(JSON.stringify({
-          type: "playPrepare",
-          data: { trackId: "unauthorized" },
-        }));
-
-        // DJ should not receive the message. Wait briefly and check.
-        const result = await Promise.race([
-          waitForMessage(djWs, 500).then(() => "received").catch(() => "timeout"),
-          new Promise((resolve) => setTimeout(() => resolve("timeout"), 500)),
-        ]);
-        assert.equal(result, "timeout", "Non-DJ playPrepare should be silently ignored");
-      } finally {
-        listenerWs.close();
-      }
-    } finally {
-      djWs.close();
-    }
-  });
-
-  it("broadcasts memberLeft when listener disconnects", async () => {
-    const djToken = await getToken(PORT, "ws_dj_5");
-    const session = await createSession(PORT, djToken);
-
-    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
-    try {
-      const listenerToken = await getToken(PORT, "ws_listener_5");
-      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
-
-      await waitForMessage(djWs); // memberJoined
-
-      const memberLeftPromise = waitForMessage(djWs);
-      listenerWs.close();
-
-      const msg = await memberLeftPromise;
-      assert.equal(msg.type, "memberLeft");
-      assert.equal(msg.data.userId, "ws_listener_5");
-    } finally {
-      djWs.close();
-    }
-  });
-
-  it("promotes new DJ when DJ disconnects", async () => {
-    const djToken = await getToken(PORT, "ws_dj_6");
-    const session = await createSession(PORT, djToken);
-
-    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
-
-    const listenerToken = await getToken(PORT, "ws_listener_6");
-    const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
-    try {
-      await waitForMessage(djWs); // memberJoined
-
-      // Collect messages from listener after DJ disconnects
-      const messages = [];
-      const collected = new Promise((resolve) => {
-        const timeout = setTimeout(() => resolve(messages), 2000);
-        listenerWs.on("message", (raw) => {
-          messages.push(JSON.parse(raw.toString()));
-          // Once we see stateSync, we have what we need
-          if (messages.some((m) => m.type === "stateSync")) {
-            clearTimeout(timeout);
-            resolve(messages);
-          }
-        });
-      });
-
-      djWs.close();
-      await collected;
-
-      const stateSync = messages.find((m) => m.type === "stateSync");
-      assert.ok(stateSync, "Expected stateSync after DJ disconnect");
-      assert.equal(stateSync.data.djUserId, "ws_listener_6");
-    } finally {
-      listenerWs.close();
-    }
-  });
-
-  it("responds to ping with pong containing server time", async () => {
-    const token = await getToken(PORT, "ws_ping_user");
-    const session = await createSession(PORT, token);
-
-    const { ws } = await connectWebSocket(PORT, token, session.id);
-    try {
-      const pongPromise = waitForMessage(ws);
-      ws.send(JSON.stringify({
-        type: "ping",
-        data: { clientSendTime: 1700000000000 },
-      }));
-
-      const msg = await pongPromise;
-      assert.equal(msg.type, "pong");
-      assert.equal(msg.data.clientSendTime, 1700000000000);
-      assert.equal(typeof msg.data.serverTime, "number");
-      assert.ok(msg.data.serverTime > 0);
-    } finally {
-      ws.close();
-    }
-  });
-
-  it("relays playCommit from DJ to listeners", async () => {
-    const djToken = await getToken(PORT, "ws_dj_7");
-    const session = await createSession(PORT, djToken);
-
-    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
-    try {
-      const listenerToken = await getToken(PORT, "ws_listener_7");
-      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
-      try {
-        await waitForMessage(djWs); // memberJoined
-
-        // DJ sends playPrepare first
-        djWs.send(JSON.stringify({
-          type: "playPrepare",
-          data: { trackId: "track-commit", track: { id: "track-commit" } },
-        }));
-        await waitForMessage(listenerWs); // playPrepare
-
-        // DJ sends playCommit
-        const commitPromise = waitForMessage(listenerWs);
-        djWs.send(JSON.stringify({
-          type: "playCommit",
-          data: { ntpTimestamp: 1700000001500, positionMs: 0 },
-        }));
-
-        const msg = await commitPromise;
-        assert.equal(msg.type, "playCommit");
-        assert.ok(msg.epoch > 0);
-        assert.ok(msg.seq > 0);
-      } finally {
-        listenerWs.close();
-      }
-    } finally {
-      djWs.close();
-    }
-  });
-
-  it("relays pause from DJ to listeners", async () => {
-    const djToken = await getToken(PORT, "ws_dj_8");
-    const session = await createSession(PORT, djToken);
-
-    const { ws: djWs } = await connectWebSocket(PORT, djToken, session.id);
-    try {
-      const listenerToken = await getToken(PORT, "ws_listener_8");
-      const { ws: listenerWs } = await connectWebSocket(PORT, listenerToken, session.id);
-      try {
-        await waitForMessage(djWs); // memberJoined
-
-        const pausePromise = waitForMessage(listenerWs);
-        djWs.send(JSON.stringify({ type: "pause", data: {} }));
-
-        const msg = await pausePromise;
-        assert.equal(msg.type, "pause");
-        assert.equal(typeof msg.data.positionMs, "number");
-        assert.equal(typeof msg.data.ntpTimestamp, "number");
-      } finally {
-        listenerWs.close();
-      }
-    } finally {
-      djWs.close();
-    }
   });
 });

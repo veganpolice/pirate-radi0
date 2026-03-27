@@ -1,12 +1,16 @@
 import Foundation
-import UIKit
+import AuthenticationServices
 import Security
 import CryptoKit
+import SpotifyiOS
+import os
+
+private let logger = Logger(subsystem: "com.pirateradio", category: "SpotifyAuth")
 
 /// Manages Spotify OAuth/PKCE authentication with secure Keychain token storage.
 @Observable
 @MainActor
-final class SpotifyAuthManager {
+final class SpotifyAuthManager: NSObject {
     // MARK: - Configuration
 
     /// Set these in your Spotify Developer Dashboard
@@ -19,7 +23,26 @@ final class SpotifyAuthManager {
         "user-read-private",
         "user-top-read",
         "streaming",
+        "app-remote-control",
     ].joined(separator: " ")
+
+    // MARK: - App Remote
+
+    /// SPTAppRemote for controlling Spotify playback on device.
+    /// ObservationIgnored because @Observable doesn't support lazy stored properties.
+    @ObservationIgnored
+    private(set) lazy var appRemote: SPTAppRemote = {
+        let config = SPTConfiguration(
+            clientID: Self.clientID,
+            redirectURL: URL(string: Self.redirectURI)!
+        )
+        let remote = SPTAppRemote(configuration: config, logLevel: .debug)
+        remote.delegate = self
+        return remote
+    }()
+
+    /// Whether SPTAppRemote is connected to the Spotify app.
+    private(set) var isConnectedToSpotifyApp = false
 
     // MARK: - State
 
@@ -34,12 +57,13 @@ final class SpotifyAuthManager {
     private var tokenExpiry: Date?
     private var codeVerifier: String?
 
-    // Continuation for the OAuth redirect callback
-    private static var authContinuation: CheckedContinuation<URL, Error>?
+    // ASWebAuthenticationSession context provider
+    private let webAuthContextProvider = WebAuthContextProvider()
 
     // MARK: - Init
 
-    init() {
+    override init() {
+        super.init()
         loadTokensFromKeychain()
         if accessToken != nil {
             isAuthenticated = true
@@ -47,16 +71,9 @@ final class SpotifyAuthManager {
         }
     }
 
-    /// Configure for demo/preview mode without real authentication.
-    func enableDemoMode() {
-        isAuthenticated = true
-        userID = "demo-user-1"
-        displayName = "DJ Powder"
-    }
-
     // MARK: - Public API
 
-    /// Start the Spotify OAuth/PKCE login flow.
+    /// Start the Spotify OAuth/PKCE login flow using ASWebAuthenticationSession.
     func signIn() async {
         error = nil
         let verifier = generateCodeVerifier()
@@ -74,25 +91,34 @@ final class SpotifyAuthManager {
         ]
 
         guard let url = components.url else { return }
+        logger.notice("Authorization URL: \(url.absoluteString)")
+        logger.notice("Client ID: \(Self.clientID)")
+        logger.notice("Redirect URI: \(Self.redirectURI)")
 
-        // Open Spotify auth in browser
-        await UIApplication.shared.open(url)
-
-        // Wait for the redirect callback
         do {
-            let callbackURL = try await withCheckedThrowingContinuation { continuation in
-                Self.authContinuation = continuation
+            let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+                let session = ASWebAuthenticationSession(
+                    url: url,
+                    callbackURLScheme: "pirate-radio"
+                ) { callbackURL, error in
+                    if let callbackURL {
+                        continuation.resume(returning: callbackURL)
+                    } else if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(throwing: PirateRadioError.notAuthenticated)
+                    }
+                }
+                session.presentationContextProvider = webAuthContextProvider
+                session.prefersEphemeralWebBrowserSession = true
+                session.start()
             }
             try await handleAuthCallback(callbackURL)
+        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+            // User cancelled — not an error
         } catch {
             self.error = .tokenRefreshFailed(underlying: error)
         }
-    }
-
-    /// Handle the OAuth redirect URL. Called from AppDelegate.
-    static func handleRedirectURL(_ url: URL) {
-        authContinuation?.resume(returning: url)
-        authContinuation = nil
     }
 
     /// Sign out and clear all tokens.
@@ -109,9 +135,8 @@ final class SpotifyAuthManager {
 
     /// Get a valid access token, refreshing if needed.
     func getAccessToken() async throws -> String {
-        // Always refresh if expired or expiry is unknown
-        let needsRefresh = tokenExpiry == nil || Date.now > (tokenExpiry ?? .distantPast).addingTimeInterval(-120)
-        if needsRefresh, refreshToken != nil {
+        if let expiry = tokenExpiry, Date.now > expiry.addingTimeInterval(-120) {
+            // Refresh proactively at 80% of expiry (2 min before)
             try await refreshAccessToken()
         }
         guard let token = accessToken else {
@@ -140,6 +165,9 @@ final class SpotifyAuthManager {
 
         await refreshUserProfile()
         isAuthenticated = true
+
+        // Connect to Spotify app for playback control
+        connectAppRemote()
     }
 
     private func exchangeCodeForTokens(code: String, verifier: String) async throws -> TokenResponse {
@@ -180,19 +208,7 @@ final class SpotifyAuthManager {
             .joined(separator: "&")
             .data(using: .utf8)
 
-        let (data, httpResponse) = try await URLSession.shared.data(for: request)
-
-        // If refresh fails (revoked, expired), clear tokens so user can re-auth
-        if let status = (httpResponse as? HTTPURLResponse)?.statusCode, status >= 400 {
-            print("[SpotifyAuth] Token refresh failed with status \(status)")
-            accessToken = nil
-            self.refreshToken = nil
-            tokenExpiry = nil
-            isAuthenticated = false
-            deleteTokensFromKeychain()
-            throw PirateRadioError.tokenExpired
-        }
-
+        let (data, _) = try await URLSession.shared.data(for: request)
         let response = try JSONDecoder().decode(TokenResponse.self, from: data)
 
         accessToken = response.accessToken
@@ -206,38 +222,77 @@ final class SpotifyAuthManager {
 
     // MARK: - User Profile
 
-    /// Wait for user profile to be loaded (used when userID is needed but profile fetch may still be in-flight).
-    func ensureUserProfile() async throws {
-        if userID != nil { return }
-        // Make sure we have a fresh token before fetching profile
-        let token = try await getAccessToken()
-        await refreshUserProfile(with: token)
-        guard userID != nil else {
-            throw PirateRadioError.notAuthenticated
+    private func refreshUserProfile() async {
+        do {
+            let token = try await getAccessToken()
+            logger.notice("Profile fetch: got access token")
+            var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me")!)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
+            logger.notice("Profile fetch: HTTP \(httpStatus)")
+
+            if httpStatus != 200 {
+                logger.error("Profile fetch failed: \(String(data: data, encoding: .utf8) ?? "no body")")
+                return
+            }
+
+            let profile = try JSONDecoder().decode(SpotifyProfile.self, from: data)
+            displayName = profile.displayName
+            userID = profile.id
+            isPremium = profile.product == "premium"
+            logger.notice("Profile loaded: \(profile.displayName ?? "?"), userID=\(profile.id), premium=\(profile.product ?? "?")")
+
+            if !isPremium {
+                error = .spotifyNotPremium
+            }
+        } catch {
+            logger.error("Profile fetch error: \(error)")
         }
     }
 
-    private func refreshUserProfile() async {
-        guard let token = accessToken else { return }
-        await refreshUserProfile(with: token)
+    // MARK: - Demo Mode
+
+    func enableDemoMode() {
+        isAuthenticated = true
+        isPremium = true
+        displayName = "DJ Powder"
+        userID = "demo-user-1"
     }
 
-    private func refreshUserProfile(with token: String) async {
-        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me")!)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    // MARK: - App Remote Connection
 
-        guard let (data, _) = try? await URLSession.shared.data(for: request),
-              let profile = try? JSONDecoder().decode(SpotifyProfile.self, from: data) else {
+    /// Connect to the Spotify app for playback control.
+    /// Reuses the PKCE access token — no separate auth flow needed.
+    func connectAppRemote() {
+        guard let token = accessToken else {
+            logger.warning("Cannot connect App Remote: no access token")
             return
         }
+        appRemote.connectionParameters.accessToken = token
+        appRemote.connect()
+    }
 
-        displayName = profile.displayName
-        userID = profile.id
-        isPremium = profile.product == "premium"
+    /// Open the Spotify app to wake it up, then connect AppRemote.
+    /// Pass a track URI (e.g. "spotify:track:xyz") to start the right song immediately,
+    /// avoiding Spotify resuming whatever it was last playing.
+    func wakeSpotifyAndConnect(playURI: String = "") {
+        guard let token = accessToken else { return }
+        appRemote.connectionParameters.accessToken = token
+        appRemote.authorizeAndPlayURI(playURI)
+    }
 
-        if !isPremium {
-            error = .spotifyNotPremium
+    /// Disconnect from the Spotify app (call when entering background).
+    func disconnectAppRemote() {
+        if appRemote.isConnected {
+            appRemote.disconnect()
         }
+    }
+
+    /// Handle URL callback from Spotify app (for App Remote auth flow).
+    func handleAppRemoteURL(_ url: URL) {
+        appRemote.authorizationParameters(from: url)
     }
 
     // MARK: - PKCE
@@ -355,6 +410,39 @@ private struct SpotifyProfile: Codable {
         case id
         case displayName = "display_name"
         case product
+    }
+}
+
+// MARK: - ASWebAuthenticationSession Context
+
+private final class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        ASPresentationAnchor()
+    }
+}
+
+// MARK: - SPTAppRemoteDelegate
+
+extension SpotifyAuthManager: SPTAppRemoteDelegate {
+    nonisolated func appRemoteDidEstablishConnection(_ appRemote: SPTAppRemote) {
+        Task { @MainActor in
+            logger.notice("SPTAppRemote connected to Spotify app")
+            self.isConnectedToSpotifyApp = true
+        }
+    }
+
+    nonisolated func appRemote(_ appRemote: SPTAppRemote, didFailConnectionAttemptWithError error: (any Error)?) {
+        Task { @MainActor in
+            logger.error("SPTAppRemote connection failed: \(error?.localizedDescription ?? "unknown")")
+            self.isConnectedToSpotifyApp = false
+        }
+    }
+
+    nonisolated func appRemote(_ appRemote: SPTAppRemote, didDisconnectWithError error: (any Error)?) {
+        Task { @MainActor in
+            logger.info("SPTAppRemote disconnected: \(error?.localizedDescription ?? "user action")")
+            self.isConnectedToSpotifyApp = false
+        }
     }
 }
 

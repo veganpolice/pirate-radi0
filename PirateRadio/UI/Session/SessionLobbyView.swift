@@ -1,11 +1,12 @@
 import SwiftUI
 
-/// Main screen after auth — create or join a session.
+/// Main screen after auth — create, join, or discover a session.
 struct SessionLobbyView: View {
     @Environment(SpotifyAuthManager.self) private var authManager
     @Environment(SessionStore.self) private var sessionStore
 
     @State private var showJoinSheet = false
+    @State private var showDiscovery = false
 
     var body: some View {
         ZStack {
@@ -33,7 +34,12 @@ struct SessionLobbyView: View {
                 // Actions
                 VStack(spacing: 16) {
                     Button {
-                        Task { await sessionStore.createSession() }
+                        if PirateRadioApp.demoMode {
+                            // In demo mode, clear currentTrack so CreateSessionView shows
+                            sessionStore.clearCurrentTrack()
+                        } else {
+                            Task { await sessionStore.createSession() }
+                        }
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "antenna.radiowaves.left.and.right")
@@ -53,6 +59,18 @@ struct SessionLobbyView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
+
+                    // Discover button
+                    Button {
+                        showDiscovery = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "dot.radiowaves.left.and.right")
+                            Text("Discover Crews")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(GloveButtonStyle(color: PirateTheme.flare))
                 }
                 .padding(.horizontal, 24)
 
@@ -77,6 +95,9 @@ struct SessionLobbyView: View {
         }
         .sheet(isPresented: $showJoinSheet) {
             JoinSessionView()
+        }
+        .sheet(isPresented: $showDiscovery) {
+            DiscoveryView()
         }
     }
 }

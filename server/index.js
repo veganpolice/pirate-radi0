@@ -16,6 +16,9 @@ const PING_INTERVAL_MS = 15_000;
 const PONG_TIMEOUT_MS = 5_000;
 const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const CODE_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const MAX_TRACK_DURATION_MS = 30 * 60 * 1000; // 30 minutes — clamp for timer safety
+const MAX_QUEUE_SIZE = 100;
+const GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
 
 // --- In-Memory State ---
 
@@ -30,6 +33,26 @@ const sessionCreationLog = new Map();
 
 /** @type {Map<string, number[]>} ip → attempt timestamps */
 const joinAttemptLog = new Map();
+
+/** @type {Map<string, {displayName: string, frequency: number}>} userId → user info */
+const userRegistry = new Map();
+
+let nextFrequency = 88.1;
+
+function assignFrequency() {
+  // Find next available frequency (skip taken ones)
+  const taken = new Set([...userRegistry.values()].map((u) => u.frequency));
+  let freq = nextFrequency;
+  let attempts = 0;
+  while (taken.has(freq) && attempts < 200) {
+    freq = Math.round((freq + 0.2) * 10) / 10;
+    if (freq > 107.9) freq = 88.1;
+    attempts++;
+  }
+  nextFrequency = Math.round((freq + 0.2) * 10) / 10;
+  if (nextFrequency > 107.9) nextFrequency = 88.1;
+  return freq;
+}
 
 /**
  * @typedef {Object} Session
@@ -47,6 +70,8 @@ const joinAttemptLog = new Map();
  * @property {Array} queue
  * @property {number} lastActivity
  * @property {number} codeCreatedAt
+ * @property {NodeJS.Timeout|null} advancementTimer - server-side queue advancement timer
+ * @property {NodeJS.Timeout|null} destroyTimeout - grace period before destroying memberless sessions
  */
 
 /**
@@ -109,8 +134,20 @@ app.get("/admin/sessions", (_req, res) => {
 // Authenticate: client sends Spotify user info, gets a JWT
 app.post("/auth", (req, res) => {
   const { spotifyUserId, displayName } = req.body;
+  console.log(`[auth] ${displayName || spotifyUserId}`);
   if (!spotifyUserId || typeof spotifyUserId !== "string") {
     return res.status(400).json({ error: "spotifyUserId required" });
+  }
+
+  // Register/update user in registry (auto-assign frequency on first auth)
+  if (!userRegistry.has(spotifyUserId)) {
+    userRegistry.set(spotifyUserId, {
+      displayName: displayName || spotifyUserId,
+      frequency: assignFrequency(),
+    });
+    console.log(`[auth] registered ${displayName || spotifyUserId} at ${userRegistry.get(spotifyUserId).frequency} MHz`);
+  } else {
+    userRegistry.get(spotifyUserId).displayName = displayName || spotifyUserId;
   }
 
   const token = jwt.sign(
@@ -132,6 +169,7 @@ app.post("/sessions", authenticateHTTP, (req, res) => {
 
   const session = createSession(userId);
   recordRateLimit(sessionCreationLog, userId);
+  console.log(`[session:create] id=${session.id} code=${session.joinCode} dj=${userId}`);
 
   res.status(201).json({
     id: session.id,
@@ -176,10 +214,13 @@ app.post("/sessions/join", authenticateHTTP, (req, res) => {
     return res.status(409).json({ error: "Session is full" });
   }
 
+  const djMember = session.members.get(session.djUserId);
+  console.log(`[session:join] code=${code} session=${session.id} dj=${djMember?.displayName || session.djUserId} members=${session.members.size}`);
   res.json({
     id: session.id,
     joinCode: session.joinCode,
     djUserId: session.djUserId,
+    djDisplayName: djMember?.displayName || session.djUserId,
     memberCount: session.members.size,
   });
 });
@@ -192,6 +233,53 @@ app.get("/sessions/:id", authenticateHTTP, (req, res) => {
   }
 
   res.json(sessionSnapshot(session));
+});
+
+// List live stations (for dial home)
+app.get("/stations", authenticateHTTP, (_req, res) => {
+  const stations = [];
+  for (const session of sessions.values()) {
+    if (!session.isPlaying && session.queue.length === 0) continue;
+
+    const user = userRegistry.get(session.creatorId);
+    if (!user) continue;
+
+    stations.push({
+      userId: session.creatorId,
+      displayName: user.displayName,
+      frequency: user.frequency,
+      sessionId: session.id,
+      currentTrack: session.currentTrack,
+    });
+  }
+  res.json({ stations });
+});
+
+// Join session by ID (bypasses code expiry for dial-based joining)
+app.post("/sessions/join-by-id", authenticateHTTP, (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId || typeof sessionId !== "string") {
+    return res.status(400).json({ error: "sessionId required" });
+  }
+
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+
+  if (session.members.size >= MAX_MEMBERS) {
+    return res.status(409).json({ error: "Session is full" });
+  }
+
+  const djMember = session.members.get(session.djUserId);
+  console.log(`[session:join-by-id] session=${session.id} dj=${djMember?.displayName || session.djUserId} members=${session.members.size}`);
+  res.json({
+    id: session.id,
+    joinCode: session.joinCode,
+    djUserId: session.djUserId,
+    djDisplayName: djMember?.displayName || session.djUserId,
+    memberCount: session.members.size,
+  });
 });
 
 // --- WebSocket Server ---
@@ -241,6 +329,7 @@ wss.on("connection", (ws) => {
   const session = sessions.get(sessionId);
 
   if (!session) {
+    console.log(`[ws] session not found: ${sessionId} (active sessions: ${sessions.size})`);
     ws.close(4004, "Session not found");
     return;
   }
@@ -257,6 +346,12 @@ wss.on("connection", (ws) => {
     existingMember.ws.close(4000, "Replaced by new connection");
   }
 
+  // Cancel grace period if someone reconnects
+  if (session.destroyTimeout) {
+    clearTimeout(session.destroyTimeout);
+    session.destroyTimeout = null;
+  }
+
   session.members.set(userId, {
     userId,
     displayName,
@@ -265,9 +360,16 @@ wss.on("connection", (ws) => {
     joinedAt: Date.now(),
   });
   session.lastActivity = Date.now();
+  console.log(`[ws] connected: ${displayName} (${userId}) to session ${sessionId}, members=${session.members.size}`);
 
   // Send session snapshot to joiner
-  ws.send(JSON.stringify({ type: "stateSync", data: sessionSnapshot(session) }));
+  ws.send(JSON.stringify({
+    type: "stateSync",
+    data: sessionSnapshot(session),
+    epoch: session.epoch,
+    seq: session.sequence,
+    timestamp: Date.now(),
+  }));
 
   // Notify others
   broadcastToSession(session, {
@@ -287,6 +389,7 @@ wss.on("connection", (ws) => {
       return; // ignore malformed
     }
 
+    console.log(`[ws:msg] ${displayName}: ${msg.type}`, msg.data ? JSON.stringify(msg.data).slice(0, 120) : "");
     handleMessage(session, userId, msg);
   });
 
@@ -314,9 +417,9 @@ wss.on("connection", (ws) => {
         });
       }
 
-      // Clean up empty session
+      // Clean up empty session (with grace period for active stations)
       if (session.members.size === 0) {
-        destroySession(session.id);
+        destroyOrGrace(session);
       }
     }
   });
@@ -366,6 +469,7 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+      scheduleAdvancement(session);
       break;
     }
 
@@ -373,6 +477,7 @@ function handleMessage(session, senderId, msg) {
       if (senderId !== session.djUserId) return;
 
       session.isPlaying = false;
+      clearAdvancement(session);
       // Snapshot the position at pause time
       if (session.positionTimestamp) {
         const elapsed = Date.now() - session.positionTimestamp;
@@ -409,6 +514,7 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+      scheduleAdvancement(session);
       break;
     }
 
@@ -426,6 +532,7 @@ function handleMessage(session, senderId, msg) {
         seq: session.sequence,
         timestamp: Date.now(),
       });
+      if (session.isPlaying) scheduleAdvancement(session);
       break;
     }
 
@@ -439,21 +546,24 @@ function handleMessage(session, senderId, msg) {
         session.positionTimestamp = Date.now();
         session.isPlaying = true;
         session.epoch++;
-        session.sequence++;
+        session.sequence = 0;
 
+        // Broadcast full state — DJ client will initiate playback
         broadcastToSession(session, {
-          type: "playPrepare",
-          data: { trackId: nextTrack.id, track: nextTrack },
+          type: "stateSync",
+          data: sessionSnapshot(session),
           epoch: session.epoch,
           seq: session.sequence,
           timestamp: Date.now(),
         });
+        scheduleAdvancement(session);
       }
       break;
     }
 
     case "addToQueue": {
       if (!msg.data?.track || !msg.data?.nonce) return;
+      if (session.queue.length >= MAX_QUEUE_SIZE) return;
       // Idempotency: check nonce
       if (session.queue.some((t) => t.nonce === msg.data.nonce)) return;
 
@@ -539,6 +649,8 @@ function createSession(creatorId) {
     queue: [],
     lastActivity: Date.now(),
     codeCreatedAt: Date.now(),
+    advancementTimer: null,
+    destroyTimeout: null,
   };
 
   sessions.set(id, session);
@@ -546,9 +658,91 @@ function createSession(creatorId) {
   return session;
 }
 
+// --- Autonomous Queue Advancement ---
+
+function scheduleAdvancement(session) {
+  clearAdvancement(session);
+  if (!session.currentTrack || !session.isPlaying) return;
+
+  const durationMs = Number(session.currentTrack.durationMs);
+  if (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > MAX_TRACK_DURATION_MS) return;
+
+  const elapsed = Date.now() - session.positionTimestamp;
+  const currentPositionMs = session.positionMs + elapsed;
+  const remainingMs = durationMs - currentPositionMs;
+
+  if (remainingMs <= 0) {
+    advanceQueue(session);
+    return;
+  }
+
+  session.advancementTimer = setTimeout(() => {
+    advanceQueue(session);
+  }, remainingMs);
+}
+
+function clearAdvancement(session) {
+  if (session.advancementTimer) {
+    clearTimeout(session.advancementTimer);
+    session.advancementTimer = null;
+  }
+}
+
+function advanceQueue(session) {
+  const nextTrack = session.queue.shift();
+  if (nextTrack) {
+    session.currentTrack = nextTrack;
+    session.positionMs = 0;
+    session.positionTimestamp = Date.now();
+    session.isPlaying = true;
+    session.epoch++;
+    session.sequence = 0;
+    session.lastActivity = Date.now();
+
+    broadcastToSession(session, {
+      type: "stateSync",
+      data: sessionSnapshot(session),
+      epoch: session.epoch,
+      seq: session.sequence,
+      timestamp: Date.now(),
+    });
+
+    scheduleAdvancement(session);
+  } else {
+    // Queue empty — station goes idle, keep currentTrack for "last played" context
+    session.isPlaying = false;
+    session.lastActivity = Date.now();
+
+    broadcastToSession(session, {
+      type: "stateSync",
+      data: sessionSnapshot(session),
+      epoch: session.epoch,
+      seq: ++session.sequence,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+function destroyOrGrace(session) {
+  if (session.queue.length > 0 || session.isPlaying) {
+    if (!session.destroyTimeout) {
+      session.destroyTimeout = setTimeout(() => {
+        destroySession(session.id);
+      }, GRACE_PERIOD_MS);
+    }
+  } else {
+    destroySession(session.id);
+  }
+}
+
 function destroySession(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) return;
+  clearAdvancement(session);
+  if (session.destroyTimeout) {
+    clearTimeout(session.destroyTimeout);
+    session.destroyTimeout = null;
+  }
   codeIndex.delete(session.joinCode);
   sessions.delete(sessionId);
 }
@@ -652,7 +846,7 @@ setInterval(() => {
     }
 
     if (session.members.size === 0) {
-      destroySession(sessionId);
+      destroyOrGrace(session);
     }
   }
 }, PING_INTERVAL_MS);
