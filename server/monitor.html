@@ -17,6 +17,7 @@
       --red: #ef4444;
       --blue: #3b82f6;
       --purple: #a855f7;
+      --yellow: #eab308;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -110,18 +111,9 @@
 
     main { padding: 24px; }
 
-    .empty-state {
-      text-align: center;
-      padding: 80px 24px;
-      color: var(--text2);
-    }
-
-    .empty-state h2 { font-size: 20px; margin-bottom: 8px; color: var(--text); }
-    .empty-state p { font-size: 14px; }
-
     .stations-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
       gap: 20px;
     }
 
@@ -133,6 +125,7 @@
       transition: border-color 0.2s;
     }
 
+    .station-card.on-air { border-color: var(--green); }
     .station-card:hover { border-color: var(--accent); }
 
     .station-header {
@@ -143,15 +136,14 @@
       border-bottom: 1px solid var(--border);
     }
 
-    .station-code {
-      font-size: 28px;
+    .station-name {
+      font-size: 24px;
       font-weight: 700;
       color: var(--accent);
-      letter-spacing: 4px;
     }
 
-    .station-id {
-      font-size: 11px;
+    .station-freq {
+      font-size: 12px;
       color: var(--text2);
       margin-top: 2px;
       font-family: monospace;
@@ -172,9 +164,10 @@
     }
 
     .badge.playing { background: rgba(34, 197, 94, 0.15); color: var(--green); }
-    .badge.paused { background: rgba(239, 68, 68, 0.15); color: var(--red); }
-    .badge.epoch { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
-    .badge.seq { background: rgba(168, 85, 247, 0.15); color: var(--purple); }
+    .badge.idle { background: rgba(136, 136, 160, 0.15); color: var(--text2); }
+    .badge.listeners { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
+    .badge.epoch { background: rgba(168, 85, 247, 0.15); color: var(--purple); }
+    .badge.history { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
 
     .now-playing {
       padding: 14px 16px;
@@ -274,7 +267,6 @@
     }
 
     .member-name { flex: 1; }
-    .member-role { font-size: 11px; color: var(--accent); font-weight: 500; }
     .member-time { font-size: 11px; color: var(--text2); }
 
     .queue-list {
@@ -381,7 +373,7 @@
     <h1>PIRATE RADIO MONITOR</h1>
     <div class="header-meta">
       <span><span class="status-dot" id="statusDot"></span><span id="statusText">connecting...</span></span>
-      <span id="sessionCount">0 stations</span>
+      <span id="stationSummary">--</span>
       <span id="lastUpdate">--</span>
     </div>
   </header>
@@ -401,9 +393,8 @@
 
   <main>
     <div id="content">
-      <div class="empty-state">
-        <h2>No Active Stations</h2>
-        <p>Waiting for sessions to appear...</p>
+      <div style="text-align:center;padding:80px 24px;color:var(--text2)">
+        <p>Connecting to server...</p>
       </div>
     </div>
 
@@ -437,15 +428,6 @@
       return `${m}:${String(s % 60).padStart(2, '0')}`;
     }
 
-    function formatDuration(ms) {
-      const s = Math.floor(ms / 1000);
-      const m = Math.floor(s / 60);
-      const h = Math.floor(m / 60);
-      if (h > 0) return `${h}h ${m % 60}m`;
-      if (m > 0) return `${m}m ${s % 60}s`;
-      return `${s}s`;
-    }
-
     function timeAgo(timestamp) {
       const diff = Date.now() - timestamp;
       if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
@@ -462,10 +444,10 @@
       return `hsl(${hue}, 65%, 55%)`;
     }
 
-    function computeCurrentPosition(session, serverTime) {
-      if (!session.isPlaying || !session.positionTimestamp) return session.positionMs;
-      const elapsed = serverTime - session.positionTimestamp;
-      return session.positionMs + elapsed;
+    function computeCurrentPosition(station, serverTime) {
+      if (!station.isPlaying || !station.positionTimestamp) return station.positionMs;
+      const elapsed = serverTime - station.positionTimestamp;
+      return station.positionMs + elapsed;
     }
 
     function addLog(type, detail) {
@@ -489,53 +471,44 @@
 
     function diffState(prev, curr) {
       if (!prev) {
-        curr.forEach(s => addLog('new session', `Station ${s.joinCode} created by ${s.creatorId}`));
+        const playing = curr.filter(s => s.isPlaying);
+        if (playing.length > 0) {
+          addLog('system', `${playing.length} of ${curr.length} stations on air`);
+        } else {
+          addLog('system', `${curr.length} stations loaded, none on air`);
+        }
         return;
       }
 
       const prevMap = new Map(prev.map(s => [s.id, s]));
-      const currMap = new Map(curr.map(s => [s.id, s]));
 
-      // New sessions
-      for (const s of curr) {
-        if (!prevMap.has(s.id)) {
-          addLog('new session', `Station ${s.joinCode} created by ${s.creatorId}`);
-        }
-      }
-
-      // Removed sessions
-      for (const s of prev) {
-        if (!currMap.has(s.id)) {
-          addLog('session end', `Station ${s.joinCode} closed`);
-        }
-      }
-
-      // Changes within existing sessions
       for (const s of curr) {
         const old = prevMap.get(s.id);
         if (!old) continue;
 
         // Track changes
         if (s.currentTrack?.id !== old.currentTrack?.id && s.currentTrack) {
-          addLog('track', `${s.joinCode}: Now playing "${s.currentTrack.name}" by ${s.currentTrack.artist}`);
+          addLog('track', `${s.name}: Now playing "${s.currentTrack.name}" by ${s.currentTrack.artist}`);
         }
 
         // Play/pause
-        if (s.isPlaying !== old.isPlaying) {
-          addLog('playback', `${s.joinCode}: ${s.isPlaying ? 'Playing' : 'Paused'}`);
+        if (s.isPlaying && !old.isPlaying) {
+          addLog('playback', `${s.name}: On air`);
+        } else if (!s.isPlaying && old.isPlaying) {
+          addLog('playback', `${s.name}: Idle`);
         }
 
-        // Member changes
+        // Listener changes
         const oldMembers = new Set(old.members.map(m => m.userId));
         const newMembers = new Set(s.members.map(m => m.userId));
         for (const m of s.members) {
           if (!oldMembers.has(m.userId)) {
-            addLog('member+', `${s.joinCode}: ${m.displayName} joined`);
+            addLog('listener+', `${s.name}: ${m.displayName} tuned in`);
           }
         }
         for (const m of old.members) {
           if (!newMembers.has(m.userId)) {
-            addLog('member-', `${s.joinCode}: ${m.displayName} left`);
+            addLog('listener-', `${s.name}: ${m.displayName} left`);
           }
         }
 
@@ -545,41 +518,36 @@
           if (diff > 0) {
             const newTracks = s.queue.slice(-diff);
             for (const t of newTracks) {
-              addLog('queue+', `${s.joinCode}: "${t.name}" added to queue`);
+              addLog('queue+', `${s.name}: "${t.name}" added`);
             }
           } else {
-            addLog('queue-', `${s.joinCode}: ${Math.abs(diff)} track(s) removed from queue`);
+            addLog('queue-', `${s.name}: ${Math.abs(diff)} track(s) played/removed`);
           }
         }
       }
     }
 
-    function renderSessions(sessions, serverTime) {
-      if (sessions.length === 0) {
-        return `<div class="empty-state">
-          <h2>No Active Stations</h2>
-          <p>Waiting for sessions to appear...</p>
-        </div>`;
-      }
-
-      return `<div class="stations-grid">${sessions.map(s => renderStation(s, serverTime)).join('')}</div>`;
+    function renderStations(stations, serverTime) {
+      return `<div class="stations-grid">${stations.map(s => renderStation(s, serverTime)).join('')}</div>`;
     }
 
     function renderStation(s, serverTime) {
       const posMs = computeCurrentPosition(s, serverTime);
       const durationMs = s.currentTrack?.durationMs || 0;
+      const totalListeners = s.members.reduce((n, m) => n + (m.alive !== false ? 1 : 0), 0);
 
       return `
-        <div class="station-card">
+        <div class="station-card${s.isPlaying ? ' on-air' : ''}">
           <div class="station-header">
             <div>
-              <div class="station-code">${s.joinCode}</div>
-              <div class="station-id">${s.id.slice(0, 8)}...</div>
+              <div class="station-name">${s.name}</div>
+              <div class="station-freq">${s.frequency} MHz</div>
             </div>
             <div class="station-badges">
-              <span class="badge ${s.isPlaying ? 'playing' : 'paused'}">${s.isPlaying ? 'PLAYING' : 'PAUSED'}</span>
+              <span class="badge ${s.isPlaying ? 'playing' : 'idle'}">${s.isPlaying ? 'ON AIR' : 'IDLE'}</span>
+              <span class="badge listeners">${totalListeners} listener${totalListeners !== 1 ? 's' : ''}</span>
+              ${s.historyLength > 0 ? `<span class="badge history">${s.historyLength} played</span>` : ''}
               <span class="badge epoch">E${s.epoch}</span>
-              <span class="badge seq">S${s.sequence}</span>
             </div>
           </div>
 
@@ -594,16 +562,15 @@
                 <div class="track-position">${formatTime(posMs)}${durationMs ? ` / ${formatTime(durationMs)}` : ''}</div>
               </div>
             </div>
-          ` : `<div class="no-track">No track playing</div>`}
+          ` : `<div class="no-track">No track queued</div>`}
 
-          <div class="section-label">Crew (${s.members.length})</div>
+          <div class="section-label">Listeners (${s.members.length})</div>
           <div class="members-list">
-            ${s.members.length === 0 ? '<div style="font-size:12px;color:var(--text2);font-style:italic">No members connected</div>' :
+            ${s.members.length === 0 ? '<div style="font-size:12px;color:var(--text2);font-style:italic">No one tuned in</div>' :
               s.members.map(m => `
                 <div class="member">
                   <div class="member-avatar" style="background:${hashColor(m.userId)}">${(m.displayName || m.userId)[0].toUpperCase()}</div>
                   <span class="member-name">${esc(m.displayName || m.userId)}</span>
-                  ${m.userId === s.djUserId ? '<span class="member-role">DJ</span>' : ''}
                   <span class="member-time">${timeAgo(m.joinedAt)}</span>
                 </div>
               `).join('')}
@@ -638,21 +605,22 @@
     async function poll() {
       const url = getServerUrl();
       try {
-        const resp = await fetch(`${url}/admin/sessions`);
+        const resp = await fetch(`${url}/admin/stations`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const sessions = await resp.json();
-        const serverTime = Date.now();
+        const data = await resp.json();
+
+        const onAir = data.stations.filter(s => s.isPlaying).length;
+        const totalListeners = data.stations.reduce((n, s) => n + s.members.length, 0);
 
         document.getElementById('statusDot').className = 'status-dot live';
         document.getElementById('statusText').textContent = 'live';
-        document.getElementById('sessionCount').textContent = `${sessions.length} station${sessions.length !== 1 ? 's' : ''}`;
+        document.getElementById('stationSummary').textContent = `${onAir}/${data.stations.length} on air | ${totalListeners} listener${totalListeners !== 1 ? 's' : ''}`;
         document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
 
-        // Diff and log changes
-        diffState(previousState, sessions);
-        previousState = sessions;
+        diffState(previousState, data.stations);
+        previousState = data.stations;
 
-        document.getElementById('content').innerHTML = renderSessions(sessions, serverTime);
+        document.getElementById('content').innerHTML = renderStations(data.stations, data.serverTime);
       } catch (err) {
         document.getElementById('statusDot').className = 'status-dot dead';
         document.getElementById('statusText').textContent = 'disconnected';
@@ -663,7 +631,7 @@
     function startPolling() {
       if (pollTimer) clearInterval(pollTimer);
       const interval = parseInt(document.getElementById('pollInterval').value);
-      poll(); // immediate
+      poll();
       pollTimer = setInterval(poll, interval);
       addLog('system', `Polling ${getServerUrl()} every ${interval / 1000}s`);
     }
