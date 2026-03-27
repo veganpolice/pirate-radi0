@@ -332,43 +332,45 @@ describe("Pirate Radio API", () => {
     });
   });
 
+  // ----- Shared WebSocket Helpers -----
+
+  /**
+   * Connect a WebSocket and collect messages until a condition is met.
+   */
+  function connectWS(port, token, sessionId) {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(
+        `ws://127.0.0.1:${port}/?token=${token}&sessionId=${sessionId}`
+      );
+      const messages = [];
+      ws.on("open", () => resolve({ ws, messages }));
+      ws.on("message", (raw) => {
+        messages.push(JSON.parse(raw.toString()));
+      });
+      ws.on("error", reject);
+    });
+  }
+
+  function waitForMessage(messages, predicate, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error(`Timed out waiting for message (have ${messages.length})`)),
+        timeoutMs
+      );
+      const interval = setInterval(() => {
+        const found = messages.find(predicate);
+        if (found) {
+          clearTimeout(timeout);
+          clearInterval(interval);
+          resolve(found);
+        }
+      }, 50);
+    });
+  }
+
   // ----- Autonomous Queue Advancement -----
 
   describe("Autonomous Queue Advancement", () => {
-    /**
-     * Connect a WebSocket and collect messages until a condition is met.
-     */
-    function connectWS(port, token, sessionId) {
-      return new Promise((resolve, reject) => {
-        const ws = new WebSocket(
-          `ws://127.0.0.1:${port}/?token=${token}&sessionId=${sessionId}`
-        );
-        const messages = [];
-        ws.on("open", () => resolve({ ws, messages }));
-        ws.on("message", (raw) => {
-          messages.push(JSON.parse(raw.toString()));
-        });
-        ws.on("error", reject);
-      });
-    }
-
-    function waitForMessage(messages, predicate, timeoutMs = 5000) {
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(
-          () => reject(new Error(`Timed out waiting for message (have ${messages.length})`)),
-          timeoutMs
-        );
-        const interval = setInterval(() => {
-          const found = messages.find(predicate);
-          if (found) {
-            clearTimeout(timeout);
-            clearInterval(interval);
-            resolve(found);
-          }
-        }, 50);
-      });
-    }
-
     it("advances queue when track duration elapses", async () => {
       const token = await getToken(PORT, "timer_dj", "TimerDJ");
       const session = await createSession(PORT, token);
@@ -765,6 +767,149 @@ describe("Pirate Radio API", () => {
       }
 
       assert.ok(got429, "Expected a 429 response after exceeding rate limit");
+    });
+  });
+
+  // ----- DJ Disconnect & Promotion -----
+
+  describe("DJ Disconnect & Promotion", () => {
+    it("promotes next member when DJ disconnects", async () => {
+      const djToken = await getToken(PORT, "promo_dj", "PromoDJ");
+      const session = await createSession(PORT, djToken);
+
+      // Listener joins
+      const listenerToken = await getToken(PORT, "promo_listener", "Listener");
+      const { ws: listenerWs, messages: listenerMsgs } = await connectWS(PORT, listenerToken, session.id);
+
+      try {
+        // Wait for listener's initial stateSync
+        await waitForMessage(listenerMsgs, (m) => m.type === "stateSync");
+
+        // DJ connects then disconnects
+        const { ws: djWs } = await connectWS(PORT, djToken, session.id);
+        await new Promise((r) => setTimeout(r, 200));
+        djWs.close();
+
+        // Listener should receive memberLeft for the DJ, then stateSync with new DJ
+        const syncMsg = await waitForMessage(
+          listenerMsgs,
+          (m) => m.type === "stateSync" && m.data?.djUserId === "promo_listener",
+          3000
+        );
+        assert.ok(syncMsg, "Listener should be promoted to DJ");
+        assert.equal(syncMsg.data.djUserId, "promo_listener");
+      } finally {
+        listenerWs.close();
+      }
+    });
+  });
+
+  // ----- Reconnecting Member -----
+
+  describe("Reconnecting Member", () => {
+    it("replaces old WebSocket when member reconnects", async () => {
+      const djToken = await getToken(PORT, "recon_dj", "ReconDJ");
+      const session = await createSession(PORT, djToken);
+
+      // First connection
+      const { ws: ws1, messages: msgs1 } = await connectWS(PORT, djToken, session.id);
+      await waitForMessage(msgs1, (m) => m.type === "stateSync");
+
+      // Second connection — should replace the first
+      const { ws: ws2, messages: msgs2 } = await connectWS(PORT, djToken, session.id);
+      await waitForMessage(msgs2, (m) => m.type === "stateSync");
+
+      // Wait for old connection to close
+      await new Promise((resolve) => {
+        ws1.on("close", resolve);
+        setTimeout(resolve, 2000); // timeout fallback
+      });
+
+      // Old connection should be closed (code 4000 = replaced)
+      assert.equal(ws1.readyState, WebSocket.CLOSED);
+
+      // New connection should still be open
+      assert.equal(ws2.readyState, WebSocket.OPEN);
+
+      ws2.close();
+    });
+  });
+
+  // ----- Grace Period -----
+
+  describe("Grace Period", () => {
+    it("keeps session alive during grace period after all members leave", async () => {
+      const token = await getToken(PORT, "grace_dj", "GraceDJ");
+      const session = await createSession(PORT, token);
+
+      // Connect and start playing (grace period only applies when playing or queue non-empty)
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+      await waitForMessage(messages, (m) => m.type === "stateSync");
+
+      ws.send(JSON.stringify({
+        type: "playPrepare",
+        data: { trackId: "grace_track", track: { id: "grace_track", name: "Grace", durationMs: 300000 } },
+      }));
+      ws.send(JSON.stringify({
+        type: "playCommit",
+        data: { positionMs: 0, ntpTimestamp: Date.now() },
+      }));
+      await waitForMessage(messages, (m) => m.type === "playCommit");
+
+      // Now disconnect — session should enter grace period (not be destroyed)
+      ws.close();
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Session should still exist (grace period is 5 minutes, we check within 1s)
+      const res = await request(PORT, "GET", "/admin/sessions");
+      const sessionList = res.body.sessions || [];
+      const found = sessionList.find((s) => s.id === session.id);
+      assert.ok(found, "Session should still exist during grace period");
+    });
+  });
+
+  // ----- addToQueue Nonce Deduplication -----
+
+  describe("addToQueue Nonce Deduplication", () => {
+    it("deduplicates addToQueue with same nonce", async () => {
+      const token = await getToken(PORT, "nonce_dj", "NonceDJ");
+      const session = await createSession(PORT, token);
+      const { ws, messages } = await connectWS(PORT, token, session.id);
+
+      try {
+        await waitForMessage(messages, (m) => m.type === "stateSync");
+
+        const track = { id: "nonce_track", name: "Nonce Song", durationMs: 180000 };
+        const nonce = "unique-nonce-123";
+
+        // Send the same addToQueue twice with identical nonce
+        ws.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track, nonce },
+        }));
+        await waitForMessage(messages, (m) => m.type === "queueUpdate");
+
+        // Clear message index for the second send
+        const countBefore = messages.filter((m) => m.type === "queueUpdate").length;
+
+        ws.send(JSON.stringify({
+          type: "addToQueue",
+          data: { track, nonce },
+        }));
+
+        // Wait a bit — second one should be silently ignored
+        await new Promise((r) => setTimeout(r, 500));
+        const countAfter = messages.filter((m) => m.type === "queueUpdate").length;
+
+        // Should only have 1 queueUpdate (the duplicate was ignored)
+        assert.equal(countAfter, countBefore, "Duplicate nonce should not produce another queueUpdate");
+
+        // Verify queue has only 1 entry
+        const lastQueueMsg = messages.filter((m) => m.type === "queueUpdate").pop();
+        assert.equal(lastQueueMsg.data.queue.length, 1, "Queue should have exactly 1 track");
+      } finally {
+        ws.close();
+      }
     });
   });
 });
