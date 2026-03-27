@@ -53,12 +53,8 @@ struct SessionRootView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let session = sessionStore.session {
-                    if session.currentTrack != nil || !session.queue.isEmpty {
-                        NowPlayingView()
-                    } else {
-                        CreateSessionView()
-                    }
+                if sessionStore.session != nil {
+                    NowPlayingView()
                 } else {
                     SessionLobbyView()
                 }

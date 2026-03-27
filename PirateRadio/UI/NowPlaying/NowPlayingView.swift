@@ -9,52 +9,19 @@ struct NowPlayingView: View {
     @State private var showQueue = false
     @State private var showTrackSearch = false
 
+    private var hasContent: Bool {
+        sessionStore.session?.currentTrack != nil || !(sessionStore.session?.queue.isEmpty ?? true)
+    }
+
     var body: some View {
         ZStack {
             PirateTheme.void.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Beat visualizer (replaces album art)
-                BeatVisualizer()
-                    .frame(height: 240)
-                    .padding(.top, 16)
-
-                // Track info below visualizer
-                trackInfo
-                    .padding(.top, 12)
-
-                // Up next queue preview
-                upNextPreview
-                    .padding(.top, 16)
-
-                Spacer()
-
-                // Pirate fleet
-                if let session = sessionStore.session {
-                    NeonPirateScene(
-                        members: session.members,
-                        djUserID: session.djUserID
-                    )
-                    .padding(.horizontal, 8)
-                }
-
-                // Crew strip
-                crewStrip
-                    .padding(.vertical, 8)
-
-                // Controls
-                if sessionStore.isDJ {
-                    djControls
-                } else {
-                    listenerControls
-                }
-
-                // Volume dial
-                FrequencyDial(value: $volume, color: PirateTheme.signal)
-                    .frame(width: 120, height: 120)
-                    .padding(.bottom, 24)
+            if hasContent {
+                playerView
+            } else {
+                emptyBroadcastView
             }
-            .padding(.horizontal, 16)
         }
         .sheet(isPresented: $showQueue) {
             QueueView()
@@ -69,6 +36,135 @@ struct NowPlayingView: View {
                 await sessionStore.play(track: firstTrack)
             }
         }
+    }
+
+    // MARK: - Player View (has tracks)
+
+    private var playerView: some View {
+        VStack(spacing: 0) {
+            // Beat visualizer (replaces album art)
+            BeatVisualizer()
+                .frame(height: 240)
+                .padding(.top, 16)
+
+            // Track info below visualizer
+            trackInfo
+                .padding(.top, 12)
+
+            // Up next queue preview
+            upNextPreview
+                .padding(.top, 16)
+
+            Spacer()
+
+            // Pirate fleet
+            if let session = sessionStore.session {
+                NeonPirateScene(
+                    members: session.members,
+                    djUserID: session.djUserID
+                )
+                .padding(.horizontal, 8)
+            }
+
+            // Crew strip
+            crewStrip
+                .padding(.vertical, 8)
+
+            // Controls
+            if sessionStore.isDJ {
+                djControls
+            } else {
+                listenerControls
+            }
+
+            // Volume dial
+            FrequencyDial(value: $volume, color: PirateTheme.signal)
+                .frame(width: 120, height: 120)
+                .padding(.bottom, 24)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Empty Broadcast View (no tracks yet)
+
+    private var emptyBroadcastView: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            Text("ON AIR")
+                .font(PirateTheme.display(24))
+                .foregroundStyle(PirateTheme.broadcast)
+                .neonGlow(PirateTheme.broadcast, intensity: 0.8)
+
+            // Join code
+            if let session = sessionStore.session {
+                VStack(spacing: 8) {
+                    Text("share this frequency")
+                        .font(PirateTheme.body(14))
+                        .foregroundStyle(.white.opacity(0.5))
+
+                    HStack(spacing: 16) {
+                        ForEach(Array(session.joinCode.enumerated()), id: \.offset) { _, char in
+                            Text(String(char))
+                                .font(PirateTheme.display(48))
+                                .foregroundStyle(PirateTheme.broadcast)
+                                .frame(width: 56, height: 72)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(PirateTheme.broadcast.opacity(0.1))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .strokeBorder(PirateTheme.broadcast, lineWidth: 1.5)
+                                )
+                                .neonGlow(PirateTheme.broadcast, intensity: 0.5)
+                        }
+                    }
+
+                    // Member count
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.2.fill")
+                        Text("\(session.members.count) crew member\(session.members.count == 1 ? "" : "s")")
+                    }
+                    .font(PirateTheme.body(14))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.top, 4)
+                }
+            }
+
+            // Pick first track
+            Button {
+                showTrackSearch = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "music.note.list")
+                    Text("Pick a Track")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(GloveButtonStyle(color: PirateTheme.broadcast))
+
+            // Share button
+            if let session = sessionStore.session {
+                ShareLink(
+                    item: "Join my Pirate Radio session! Code: \(session.joinCode)",
+                    subject: Text("Pirate Radio"),
+                    message: Text("Tune in to my session with code \(session.joinCode)")
+                ) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "square.and.arrow.up")
+                        Text("Share Code")
+                    }
+                }
+                .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
+            }
+
+            Spacer()
+
+            ConnectionStatusBadge(state: sessionStore.connectionState)
+                .padding(.bottom, 16)
+        }
+        .padding(.horizontal, 24)
     }
 
     // MARK: - Track Info

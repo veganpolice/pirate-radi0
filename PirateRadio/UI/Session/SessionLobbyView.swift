@@ -37,7 +37,7 @@ struct SessionLobbyView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "antenna.radiowaves.left.and.right")
-                            Text("Start Broadcasting")
+                            Text("My Broadcast")
                         }
                         .frame(maxWidth: .infinity)
                     }
