@@ -14,6 +14,16 @@ final class SessionStore {
     private(set) var isLoading = false
     private(set) var error: PirateRadioError?
 
+    // MARK: - BPM (stub — not yet wired to Spotify audio analysis)
+
+    var currentBPM: Double? { nil }
+
+    func currentPlaybackPosition(at date: Date) -> Double {
+        guard let engine = syncEngine else { return 0 }
+        // TODO: expose anchor from SyncEngine for beat-phase computation
+        return 0
+    }
+
     // MARK: - Dial Home State
 
     private(set) var stations: [Station] = []

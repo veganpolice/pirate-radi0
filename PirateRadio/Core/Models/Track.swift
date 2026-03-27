@@ -28,6 +28,20 @@ struct Track: Codable, Sendable, Identifiable, Equatable {
         self.isDownvotedByMe = isDownvotedByMe
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        artist = try container.decode(String.self, forKey: .artist)
+        albumName = try container.decode(String.self, forKey: .albumName)
+        albumArtURL = try container.decodeIfPresent(URL.self, forKey: .albumArtURL)
+        durationMs = try container.decodeIfPresent(Int.self, forKey: .durationMs) ?? 0
+        votes = try container.decodeIfPresent(Int.self, forKey: .votes) ?? 0
+        requestedBy = try container.decodeIfPresent(String.self, forKey: .requestedBy)
+        isUpvotedByMe = try container.decodeIfPresent(Bool.self, forKey: .isUpvotedByMe) ?? false
+        isDownvotedByMe = try container.decodeIfPresent(Bool.self, forKey: .isDownvotedByMe) ?? false
+    }
+
     var durationFormatted: String {
         let seconds = durationMs / 1000
         let mins = seconds / 60

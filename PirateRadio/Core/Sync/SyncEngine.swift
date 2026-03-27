@@ -125,7 +125,7 @@ actor SyncEngine {
         let commitMsg = SyncMessage(
             id: UUID(),
             type: .playCommit(trackID: track.id, startAtNtp: commitNtp, refSeq: prepareMsg.sequenceNumber),
-            sequenceNumber: lastProcessedSeq + 2,
+            sequenceNumber: lastProcessedSeq,
             epoch: currentEpoch,
             timestamp: clock.now()
         )

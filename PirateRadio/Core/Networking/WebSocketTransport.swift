@@ -152,7 +152,7 @@ actor WebSocketTransport: SessionTransport {
 
     // MARK: - Server → Client Translation
 
-    private static func translate(_ msg: ServerMessage, rawData: Data) -> SyncMessage? {
+    static func translate(_ msg: ServerMessage, rawData: Data) -> SyncMessage? {
         let seq = msg.seq ?? 0
         let epoch = msg.epoch ?? 0
         let ts = msg.timestamp ?? 0
@@ -226,7 +226,7 @@ actor WebSocketTransport: SessionTransport {
         )
     }
 
-    private static func translateStateSync(_ data: JSONValue?, rawData: Data) -> SyncMessage.SyncMessageType? {
+    static func translateStateSync(_ data: JSONValue?, rawData: Data) -> SyncMessage.SyncMessageType? {
         guard let d = data else { return nil }
 
         // Parse the stateSync data into a SessionSnapshot
