@@ -285,7 +285,7 @@ app.post("/sessions/join-by-id", authenticateHTTP, (req, res) => {
 // --- WebSocket Server ---
 
 const server = createServer(app);
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 512_000 });
 
 server.on("upgrade", (request, socket, head) => {
   // Authenticate WebSocket upgrade via query param token
@@ -672,7 +672,7 @@ function scheduleAdvancement(session) {
   const remainingMs = durationMs - currentPositionMs;
 
   if (remainingMs <= 0) {
-    advanceQueue(session);
+    setImmediate(() => advanceQueue(session));
     return;
   }
 

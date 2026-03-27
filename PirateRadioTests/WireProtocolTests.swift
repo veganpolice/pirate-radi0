@@ -41,7 +41,7 @@ struct ServerToClientTests {
         if case .playCommit(_, let startAtNtp, _) = msg?.type {
             #expect(startAtNtp == 1700000001500)
         } else {
-            Issue.record("Expected .playCommit")
+            Issue.record("Expected .playCommit, got \(String(describing: msg?.type))")
         }
     }
 
@@ -55,7 +55,7 @@ struct ServerToClientTests {
         if case .pause(let atNtp) = msg?.type {
             #expect(atNtp == 1700000002000)
         } else {
-            Issue.record("Expected .pause")
+            Issue.record("Expected .pause, got \(String(describing: msg?.type))")
         }
     }
 
@@ -69,7 +69,7 @@ struct ServerToClientTests {
         if case .resume(let atNtp) = msg?.type {
             #expect(atNtp == 1700000004500)
         } else {
-            Issue.record("Expected .resume")
+            Issue.record("Expected .resume, got \(String(describing: msg?.type))")
         }
     }
 
@@ -83,7 +83,7 @@ struct ServerToClientTests {
         if case .seek(let positionMs, _) = msg?.type {
             #expect(positionMs == 90000)
         } else {
-            Issue.record("Expected .seek")
+            Issue.record("Expected .seek, got \(String(describing: msg?.type))")
         }
     }
 
@@ -98,7 +98,7 @@ struct ServerToClientTests {
             #expect(userID == "user-42")
             #expect(displayName == "Alice")
         } else {
-            Issue.record("Expected .memberJoined")
+            Issue.record("Expected .memberJoined, got \(String(describing: msg?.type))")
         }
     }
 
@@ -112,7 +112,7 @@ struct ServerToClientTests {
         if case .memberLeft(let userID) = msg?.type {
             #expect(userID == "user-42")
         } else {
-            Issue.record("Expected .memberLeft")
+            Issue.record("Expected .memberLeft, got \(String(describing: msg?.type))")
         }
     }
 
@@ -128,7 +128,7 @@ struct ServerToClientTests {
             #expect(tracks[0].id == "t1")
             #expect(tracks[1].id == "t2")
         } else {
-            Issue.record("Expected .queueUpdate")
+            Issue.record("Expected .queueUpdate, got \(String(describing: msg?.type))")
         }
     }
 
@@ -151,7 +151,7 @@ struct ServerToClientTests {
             #expect(snapshot.queue[0].id == "q1")
             #expect(snapshot.queue[1].id == "q2")
         } else {
-            Issue.record("Expected .stateSync")
+            Issue.record("Expected .stateSync, got \(String(describing: msg?.type))")
         }
     }
 
@@ -166,7 +166,7 @@ struct ServerToClientTests {
             #expect(snapshot.trackID == nil)
             #expect(snapshot.playbackRate == 0.0) // isPlaying = false
         } else {
-            Issue.record("Expected .stateSync")
+            Issue.record("Expected .stateSync, got \(String(describing: msg?.type))")
         }
     }
 
@@ -200,7 +200,7 @@ struct ServerToClientTests {
             #expect(posMs == 12345)
             #expect(ntp == 3000000)
         } else {
-            Issue.record("Expected .driftReport")
+            Issue.record("Expected .driftReport, got \(String(describing: msg?.type))")
         }
     }
 }

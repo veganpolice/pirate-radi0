@@ -1,5 +1,9 @@
 name: Server Tests
-on: [push, pull_request]
+on:
+  push:
+    paths: ['server/**']
+  pull_request:
+    paths: ['server/**']
 jobs:
   test:
     runs-on: ubuntu-latest

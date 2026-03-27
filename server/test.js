@@ -571,18 +571,10 @@ describe("Pirate Radio API", () => {
       const token = await getToken(PORT, "stations_dj", "StationsDJ");
       const session = await createSession(PORT, token);
 
-      // Connect via WebSocket and start playing so the station is "live"
-      const ws = await new Promise((resolve, reject) => {
-        const conn = new WebSocket(
-          `ws://127.0.0.1:${PORT}/?token=${token}&sessionId=${session.id}`
-        );
-        conn.on("open", () => resolve(conn));
-        conn.on("error", reject);
-      });
+      const { ws, messages } = await connectWS(PORT, token, session.id);
 
       try {
-        // Wait for initial stateSync
-        await new Promise((r) => setTimeout(r, 200));
+        await waitForMessage(messages, (m) => m.type === "stateSync");
 
         // Play a track so isPlaying becomes true
         ws.send(JSON.stringify({
@@ -593,7 +585,7 @@ describe("Pirate Radio API", () => {
           type: "playCommit",
           data: { positionMs: 0, ntpTimestamp: Date.now() },
         }));
-        await new Promise((r) => setTimeout(r, 200));
+        await waitForMessage(messages, (m) => m.type === "playCommit");
 
         const res = await request(PORT, "GET", "/stations", {
           headers: { Authorization: `Bearer ${token}` },
@@ -686,15 +678,11 @@ describe("Pirate Radio API", () => {
       const session1 = await createSession(PORT, token1);
       const session2 = await createSession(PORT, token2);
 
-      // Start playback on both
+      // Start playback on both using connectWS
+      const connections = [];
       for (const [token, session] of [[token1, session1], [token2, session2]]) {
-        const ws = await new Promise((resolve, reject) => {
-          const conn = new WebSocket(
-            `ws://127.0.0.1:${PORT}/?token=${token}&sessionId=${session.id}`
-          );
-          conn.on("open", () => resolve(conn));
-          conn.on("error", reject);
-        });
+        const { ws, messages } = await connectWS(PORT, token, session.id);
+        await waitForMessage(messages, (m) => m.type === "stateSync");
         ws.send(JSON.stringify({
           type: "playPrepare",
           data: { trackId: "t1", track: { id: "t1", name: "T", durationMs: 60000 } },
@@ -703,21 +691,23 @@ describe("Pirate Radio API", () => {
           type: "playCommit",
           data: { positionMs: 0, ntpTimestamp: Date.now() },
         }));
-        await new Promise((r) => setTimeout(r, 100));
-        ws.close();
+        await waitForMessage(messages, (m) => m.type === "playCommit");
+        connections.push(ws);
       }
 
-      await new Promise((r) => setTimeout(r, 200));
+      try {
+        const res = await request(PORT, "GET", "/stations", {
+          headers: { Authorization: `Bearer ${token1}` },
+        });
 
-      const res = await request(PORT, "GET", "/stations", {
-        headers: { Authorization: `Bearer ${token1}` },
-      });
+        const stationA = res.body.stations.find((s) => s.userId === "freq_user_a");
+        const stationB = res.body.stations.find((s) => s.userId === "freq_user_b");
 
-      const stationA = res.body.stations.find((s) => s.userId === "freq_user_a");
-      const stationB = res.body.stations.find((s) => s.userId === "freq_user_b");
-
-      if (stationA && stationB) {
-        assert.notEqual(stationA.frequency, stationB.frequency, "Users should have different frequencies");
+        if (stationA && stationB) {
+          assert.notEqual(stationA.frequency, stationB.frequency, "Users should have different frequencies");
+        }
+      } finally {
+        connections.forEach((ws) => ws.close());
       }
     });
   });

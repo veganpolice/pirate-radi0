@@ -308,8 +308,9 @@ actor SyncEngine {
         try? await musicSource.play(trackID: trackID, at: position)
 
         let elapsed = ProcessInfo.processInfo.systemUptime - startTime
-        if playLatencySamples.count < 10 {
-            playLatencySamples.append(elapsed)
+        playLatencySamples.append(elapsed)
+        if playLatencySamples.count > 10 {
+            playLatencySamples.removeFirst()
         }
 
         currentAnchor = NTPAnchoredPosition(

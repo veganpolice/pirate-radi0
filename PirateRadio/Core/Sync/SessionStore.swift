@@ -18,17 +18,15 @@ final class SessionStore {
 
     var currentBPM: Double? { nil }
 
-    func currentPlaybackPosition(at date: Date) -> Double {
-        guard let engine = syncEngine else { return 0 }
-        // TODO: expose anchor from SyncEngine for beat-phase computation
-        return 0
-    }
+    // TODO: expose anchor from SyncEngine for beat-phase computation
+    var currentPlaybackPosition: Double { 0 }
 
     // MARK: - Dial Home State
 
     private(set) var stations: [Station] = []
     private(set) var isAutoTuning = false
     private var tuneTask: Task<Void, Never>?
+    private var spotifyWakeTask: Task<Void, Never>?
     private var tuneGeneration: UUID = UUID()
 
     // MARK: - Token Cache
@@ -356,6 +354,7 @@ final class SessionStore {
         self.syncEngine = engine
     }
 
+    // internal for testability
     func handleUpdate(_ update: SyncEngine.SessionUpdate) {
         switch update {
         case .connectionStateChanged(let state):
@@ -398,6 +397,7 @@ final class SessionStore {
         }
     }
 
+    // internal for testability
     func handleStateSync(_ snapshot: SessionSnapshot) {
         print("[SessionStore] Received stateSync: dj=\(snapshot.djUserID), members=\(snapshot.members.count), track=\(snapshot.trackID ?? "none")")
 
@@ -455,8 +455,10 @@ final class SessionStore {
         if snapshot.playbackRate > 0 && snapshot.trackID != nil {
             if !authManager.isConnectedToSpotifyApp {
                 print("[SessionStore] stateSync shows active playback — waking Spotify for listener")
-                Task {
+                spotifyWakeTask?.cancel()
+                spotifyWakeTask = Task {
                     await ensureSpotifyConnected(trackID: snapshot.trackID)
+                    guard !Task.isCancelled else { return }
                     if authManager.isConnectedToSpotifyApp {
                         print("[SessionStore] Spotify connected — retrying catch-up playback")
                         await syncEngine?.retryCatchUpPlayback()

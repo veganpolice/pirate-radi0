@@ -18,6 +18,7 @@
 		3017E628F6D9A5281095ADBC /* RequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33A70C95D0D61E8C88D1591A /* RequestsView.swift */; };
 		3841354410B4BBA56538044D /* Kronos in Frameworks */ = {isa = PBXBuildFile; productRef = 808F79ADA3F3C0F7A40DC874 /* Kronos */; };
 		3DAD82500573D58C0BDAED4E /* SessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7944EEB43CBF9D74199648 /* SessionStoreTests.swift */; };
+		40BC5EEB1F45E1A8307BD730 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBFF43CD7897184B467A999 /* MockData.swift */; };
 		41BC77BD716ECF265A8DB6D7 /* WalkieTalkieButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98F9153B2BC2FC35733B3D6 /* WalkieTalkieButton.swift */; };
 		4560AFC130E2A5E1E2CA4F9F /* TrackProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33C3112283966EE1D927A76 /* TrackProgressBar.swift */; };
 		46DEE3BB2125BE46F96498A4 /* JoinSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2F8B2FD2A9DDC751223CA6 /* JoinSessionView.swift */; };
@@ -37,9 +38,7 @@
 		7722322289D59F2D65D35894 /* SpotifyAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29613A51683EAA6F8E721402 /* SpotifyAuthView.swift */; };
 		796CF29D034ADEFCB8757CC7 /* SpotifyPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7A9CA2C320EA8B272E851A /* SpotifyPlayer.swift */; };
 		8DB3034EF0B70A0F99049299 /* NeonPirateScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEFD32B86E4A92D828E16B /* NeonPirateScene.swift */; };
-		8EE5D3B86E80783256EABC05 /* MockTimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39327321C704C4463A676297 /* MockTimerManager.swift */; };
 		95E251D4BF3808924614D9D8 /* FrequencyDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23040DFEF11900C2500B646D /* FrequencyDial.swift */; };
-		9773CCB1A608195927C200A6 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E03792B7C201F38351FE541 /* MockData.swift */; };
 		984FB2FAD9A80976D31A30F0 /* ServerMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 453E51C40B34CC4649FCD917 /* ServerMessage.swift */; };
 		9FADC6A88F7B7F9DE1C6B0E0 /* SyncEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EFCDBE27CF9597D6CE90B6E /* SyncEngineTests.swift */; };
 		9FC7243462ED1F5990FB958E /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98ECD25694E483F36914616 /* OnboardingView.swift */; };
@@ -61,6 +60,7 @@
 		D360D4014DAC95A36EA16D48 /* ConnectionStatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50858029E4349C69A37E144C /* ConnectionStatusBadge.swift */; };
 		D7E96E4A9599B26E5CE9AE7A /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F73EDEFF80F51A9FFEA6036 /* DiscoveryView.swift */; };
 		D877D1A1200F636F20A5F894 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 358DBF75544F644C797C711E /* SyncEngine.swift */; };
+		D8D54BB2846DD4261FE6F924 /* MockTimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1406147C792A7CFC3A60768A /* MockTimerManager.swift */; };
 		D9A3C6C56ACDAFB1BAD995C5 /* ChairliftModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2584E7719F1217E8E2095659 /* ChairliftModeView.swift */; };
 		D9D3BEEFD1D1D6D0004CCFB1 /* HotSeatBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2198441C050E13DC4038C08 /* HotSeatBanner.swift */; };
 		DD43C9013B4D08E85474446D /* SessionLobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8CBC3E502740119B63125A /* SessionLobbyView.swift */; };
@@ -86,6 +86,7 @@
 		0AE84CFC1C0588A8910FF0E4 /* SignalLostOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalLostOverlay.swift; sourceTree = "<group>"; };
 		1192C8ECB440A657DF09DA8D /* NowPlayingBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingBridge.swift; sourceTree = "<group>"; };
 		121D1193A02E1188D993C4A3 /* MockMusicSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockMusicSource.swift; sourceTree = "<group>"; };
+		1406147C792A7CFC3A60768A /* MockTimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTimerManager.swift; sourceTree = "<group>"; };
 		1E74DECE41C50E3D1473600E /* SessionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSettingsView.swift; sourceTree = "<group>"; };
 		227D358A247C684183CB4B21 /* SyncCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncCommand.swift; sourceTree = "<group>"; };
 		23040DFEF11900C2500B646D /* FrequencyDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyDial.swift; sourceTree = "<group>"; };
@@ -99,8 +100,6 @@
 		34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioTests.swift; sourceTree = "<group>"; };
 		358DBF75544F644C797C711E /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
 		38EF73C4983CA0C2182E6FD2 /* BPMGauge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPMGauge.swift; sourceTree = "<group>"; };
-		39327321C704C4463A676297 /* MockTimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTimerManager.swift; sourceTree = "<group>"; };
-		3E03792B7C201F38351FE541 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		408B663AD10B9AE7F3377AFC /* PirateRadio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PirateRadio.entitlements; sourceTree = "<group>"; };
 		453E51C40B34CC4649FCD917 /* ServerMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessage.swift; sourceTree = "<group>"; };
 		46ED29ACB39D7297C647163D /* MockClockProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockClockProvider.swift; sourceTree = "<group>"; };
@@ -140,6 +139,7 @@
 		D7602EDD6BC60A82E0754A3B /* ToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManager.swift; sourceTree = "<group>"; };
 		D87415D7E21E29074C898BD5 /* PirateRadioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioApp.swift; sourceTree = "<group>"; };
 		DD902CFB43ED0E40F25AF39C /* VinylArtView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VinylArtView.swift; sourceTree = "<group>"; };
+		DDBFF43CD7897184B467A999 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		EB3391FC863811594B8B3B3A /* BeatPulseBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeatPulseBackground.swift; sourceTree = "<group>"; };
 		F15BEE3A88814DC1FBECEA3A /* SpotifyAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuth.swift; sourceTree = "<group>"; };
 		F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRTStaticOverlay.swift; sourceTree = "<group>"; };
@@ -227,8 +227,10 @@
 			isa = PBXGroup;
 			children = (
 				46ED29ACB39D7297C647163D /* MockClockProvider.swift */,
+				DDBFF43CD7897184B467A999 /* MockData.swift */,
 				121D1193A02E1188D993C4A3 /* MockMusicSource.swift */,
 				A827E3CA365E7EA1C6046F08 /* MockSessionTransport.swift */,
+				1406147C792A7CFC3A60768A /* MockTimerManager.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -306,7 +308,6 @@
 		8801395A1EB8DACAB0736AF5 /* Core */ = {
 			isa = PBXGroup;
 			children = (
-				C9A015D1C3038EDAFAD4F294 /* Mock */,
 				3B384C096F430EB93BF91B8B /* Mocks */,
 				12262072FEF143759864C3C5 /* Models */,
 				6F9DD8FFFF76A5322D822615 /* Networking */,
@@ -375,15 +376,6 @@
 				29613A51683EAA6F8E721402 /* SpotifyAuthView.swift */,
 			);
 			path = Auth;
-			sourceTree = "<group>";
-		};
-		C9A015D1C3038EDAFAD4F294 /* Mock */ = {
-			isa = PBXGroup;
-			children = (
-				3E03792B7C201F38351FE541 /* MockData.swift */,
-				39327321C704C4463A676297 /* MockTimerManager.swift */,
-			);
-			path = Mock;
 			sourceTree = "<group>";
 		};
 		CA48167EA335976C24196F7A /* NowPlaying */ = {
@@ -526,10 +518,10 @@
 				B88273A111F419613BB75984 /* KronosClock.swift in Sources */,
 				C31E0020CA57B07870CD97F4 /* MemberProfileCard.swift in Sources */,
 				4F256D34C27378CB41526E2B /* MockClockProvider.swift in Sources */,
-				9773CCB1A608195927C200A6 /* MockData.swift in Sources */,
+				40BC5EEB1F45E1A8307BD730 /* MockData.swift in Sources */,
 				289E23F6842B17069691ED11 /* MockMusicSource.swift in Sources */,
 				53A0279F375DDD8A93059362 /* MockSessionTransport.swift in Sources */,
-				8EE5D3B86E80783256EABC05 /* MockTimerManager.swift in Sources */,
+				D8D54BB2846DD4261FE6F924 /* MockTimerManager.swift in Sources */,
 				1236952CEE88CE9030E31FD4 /* MusicSource.swift in Sources */,
 				8DB3034EF0B70A0F99049299 /* NeonPirateScene.swift in Sources */,
 				4798A78E07883E930AC99E82 /* NowPlayingBridge.swift in Sources */,
