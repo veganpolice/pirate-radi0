@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pirate Radio Monitor</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a26;
+      --border: #2a2a3a;
+      --text: #e0e0e8;
+      --text2: #8888a0;
+      --accent: #ff6b35;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --purple: #a855f7;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', 'Fira Code', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+
+    .header-meta {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text2);
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .status-dot.live { background: var(--green); animation: pulse 2s infinite; }
+    .status-dot.dead { background: var(--red); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .config-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .config-bar label { color: var(--text2); }
+
+    .config-bar input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      width: 340px;
+    }
+
+    .config-bar button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 5px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .config-bar button:hover { opacity: 0.9; }
+
+    main { padding: 24px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 24px;
+      color: var(--text2);
+    }
+
+    .empty-state h2 { font-size: 20px; margin-bottom: 8px; color: var(--text); }
+    .empty-state p { font-size: 14px; }
+
+    .stations-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 20px;
+    }
+
+    .station-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .station-card:hover { border-color: var(--accent); }
+
+    .station-header {
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .station-code {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 4px;
+    }
+
+    .station-id {
+      font-size: 11px;
+      color: var(--text2);
+      margin-top: 2px;
+      font-family: monospace;
+    }
+
+    .station-badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .badge.playing { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+    .badge.paused { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+    .badge.epoch { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
+    .badge.seq { background: rgba(168, 85, 247, 0.15); color: var(--purple); }
+
+    .now-playing {
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: var(--surface2);
+    }
+
+    .album-art {
+      width: 52px;
+      height: 52px;
+      border-radius: 6px;
+      background: var(--border);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .album-art-placeholder {
+      width: 52px;
+      height: 52px;
+      border-radius: 6px;
+      background: var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text2);
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .track-info { min-width: 0; flex: 1; }
+
+    .track-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-artist {
+      font-size: 12px;
+      color: var(--text2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-position {
+      font-size: 11px;
+      color: var(--text2);
+      font-family: monospace;
+      margin-top: 2px;
+    }
+
+    .no-track {
+      padding: 14px 16px;
+      color: var(--text2);
+      font-size: 13px;
+      font-style: italic;
+      background: var(--surface2);
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text2);
+      padding: 10px 16px 6px;
+    }
+
+    .members-list {
+      padding: 0 16px 12px;
+    }
+
+    .member {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      font-size: 13px;
+    }
+
+    .member-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .member-name { flex: 1; }
+    .member-role { font-size: 11px; color: var(--accent); font-weight: 500; }
+    .member-time { font-size: 11px; color: var(--text2); }
+
+    .queue-list {
+      padding: 0 16px 12px;
+    }
+
+    .queue-item {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 5px 0;
+      font-size: 13px;
+    }
+
+    .queue-num {
+      color: var(--text2);
+      font-size: 11px;
+      width: 16px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .queue-art {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      background: var(--border);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .queue-track-info { min-width: 0; flex: 1; }
+
+    .queue-track-name {
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-track-artist {
+      font-size: 11px;
+      color: var(--text2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-added-by {
+      font-size: 10px;
+      color: var(--text2);
+      flex-shrink: 0;
+    }
+
+    .empty-queue {
+      padding: 8px 0;
+      font-size: 12px;
+      color: var(--text2);
+      font-style: italic;
+    }
+
+    .activity-log {
+      margin-top: 24px;
+    }
+
+    .activity-log h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: var(--text2);
+    }
+
+    .log-entries {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    .log-entry {
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--text2); flex-shrink: 0; }
+    .log-type { color: var(--accent); flex-shrink: 0; width: 100px; }
+    .log-detail { color: var(--text); }
+
+    @media (max-width: 768px) {
+      .stations-grid {
+        grid-template-columns: 1fr;
+      }
+      .config-bar input { width: 200px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PIRATE RADIO MONITOR</h1>
+    <div class="header-meta">
+      <span><span class="status-dot" id="statusDot"></span><span id="statusText">connecting...</span></span>
+      <span id="sessionCount">0 stations</span>
+      <span id="lastUpdate">--</span>
+    </div>
+  </header>
+
+  <div class="config-bar">
+    <label>Server:</label>
+    <input type="text" id="serverUrl" value="" />
+    <button onclick="startPolling()">Connect</button>
+    <label style="margin-left: auto;">Poll:</label>
+    <select id="pollInterval" onchange="startPolling()" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 13px;">
+      <option value="2000">2s</option>
+      <option value="5000" selected>5s</option>
+      <option value="10000">10s</option>
+      <option value="30000">30s</option>
+    </select>
+  </div>
+
+  <main>
+    <div id="content">
+      <div class="empty-state">
+        <h2>No Active Stations</h2>
+        <p>Waiting for sessions to appear...</p>
+      </div>
+    </div>
+
+    <div class="activity-log">
+      <h3>Activity Log</h3>
+      <div class="log-entries" id="logEntries">
+        <div class="log-entry">
+          <span class="log-time">--:--:--</span>
+          <span class="log-type">system</span>
+          <span class="log-detail">Monitoring dashboard started</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let pollTimer = null;
+    let previousState = null;
+    const logEntries = [];
+    const MAX_LOG = 200;
+
+    function getServerUrl() {
+      const val = document.getElementById('serverUrl').value.trim();
+      if (val) return val.replace(/\/$/, '');
+      return window.location.origin;
+    }
+
+    function formatTime(ms) {
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      return `${m}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    function formatDuration(ms) {
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      const h = Math.floor(m / 60);
+      if (h > 0) return `${h}h ${m % 60}m`;
+      if (m > 0) return `${m}m ${s % 60}s`;
+      return `${s}s`;
+    }
+
+    function timeAgo(timestamp) {
+      const diff = Date.now() - timestamp;
+      if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+      return `${Math.floor(diff / 3600000)}h ago`;
+    }
+
+    function hashColor(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const hue = Math.abs(hash % 360);
+      return `hsl(${hue}, 65%, 55%)`;
+    }
+
+    function computeCurrentPosition(session, serverTime) {
+      if (!session.isPlaying || !session.positionTimestamp) return session.positionMs;
+      const elapsed = serverTime - session.positionTimestamp;
+      return session.positionMs + elapsed;
+    }
+
+    function addLog(type, detail) {
+      const now = new Date();
+      const time = now.toTimeString().slice(0, 8);
+      logEntries.unshift({ time, type, detail });
+      if (logEntries.length > MAX_LOG) logEntries.pop();
+      renderLog();
+    }
+
+    function renderLog() {
+      const el = document.getElementById('logEntries');
+      el.innerHTML = logEntries.map(e =>
+        `<div class="log-entry">
+          <span class="log-time">${e.time}</span>
+          <span class="log-type">${e.type}</span>
+          <span class="log-detail">${e.detail}</span>
+        </div>`
+      ).join('');
+    }
+
+    function diffState(prev, curr) {
+      if (!prev) {
+        curr.forEach(s => addLog('new session', `Station ${s.joinCode} created by ${s.creatorId}`));
+        return;
+      }
+
+      const prevMap = new Map(prev.map(s => [s.id, s]));
+      const currMap = new Map(curr.map(s => [s.id, s]));
+
+      // New sessions
+      for (const s of curr) {
+        if (!prevMap.has(s.id)) {
+          addLog('new session', `Station ${s.joinCode} created by ${s.creatorId}`);
+        }
+      }
+
+      // Removed sessions
+      for (const s of prev) {
+        if (!currMap.has(s.id)) {
+          addLog('session end', `Station ${s.joinCode} closed`);
+        }
+      }
+
+      // Changes within existing sessions
+      for (const s of curr) {
+        const old = prevMap.get(s.id);
+        if (!old) continue;
+
+        // Track changes
+        if (s.currentTrack?.id !== old.currentTrack?.id && s.currentTrack) {
+          addLog('track', `${s.joinCode}: Now playing "${s.currentTrack.name}" by ${s.currentTrack.artist}`);
+        }
+
+        // Play/pause
+        if (s.isPlaying !== old.isPlaying) {
+          addLog('playback', `${s.joinCode}: ${s.isPlaying ? 'Playing' : 'Paused'}`);
+        }
+
+        // Member changes
+        const oldMembers = new Set(old.members.map(m => m.userId));
+        const newMembers = new Set(s.members.map(m => m.userId));
+        for (const m of s.members) {
+          if (!oldMembers.has(m.userId)) {
+            addLog('member+', `${s.joinCode}: ${m.displayName} joined`);
+          }
+        }
+        for (const m of old.members) {
+          if (!newMembers.has(m.userId)) {
+            addLog('member-', `${s.joinCode}: ${m.displayName} left`);
+          }
+        }
+
+        // Queue changes
+        if (s.queue.length !== old.queue.length) {
+          const diff = s.queue.length - old.queue.length;
+          if (diff > 0) {
+            const newTracks = s.queue.slice(-diff);
+            for (const t of newTracks) {
+              addLog('queue+', `${s.joinCode}: "${t.name}" added to queue`);
+            }
+          } else {
+            addLog('queue-', `${s.joinCode}: ${Math.abs(diff)} track(s) removed from queue`);
+          }
+        }
+      }
+    }
+
+    function renderSessions(sessions, serverTime) {
+      if (sessions.length === 0) {
+        return `<div class="empty-state">
+          <h2>No Active Stations</h2>
+          <p>Waiting for sessions to appear...</p>
+        </div>`;
+      }
+
+      return `<div class="stations-grid">${sessions.map(s => renderStation(s, serverTime)).join('')}</div>`;
+    }
+
+    function renderStation(s, serverTime) {
+      const posMs = computeCurrentPosition(s, serverTime);
+      const durationMs = s.currentTrack?.durationMs || 0;
+
+      return `
+        <div class="station-card">
+          <div class="station-header">
+            <div>
+              <div class="station-code">${s.joinCode}</div>
+              <div class="station-id">${s.id.slice(0, 8)}...</div>
+            </div>
+            <div class="station-badges">
+              <span class="badge ${s.isPlaying ? 'playing' : 'paused'}">${s.isPlaying ? 'PLAYING' : 'PAUSED'}</span>
+              <span class="badge epoch">E${s.epoch}</span>
+              <span class="badge seq">S${s.sequence}</span>
+            </div>
+          </div>
+
+          ${s.currentTrack ? `
+            <div class="now-playing">
+              ${s.currentTrack.albumArtURL || s.currentTrack.albumArt
+                ? `<img class="album-art" src="${s.currentTrack.albumArtURL || s.currentTrack.albumArt}" alt="" onerror="this.style.display='none'">`
+                : `<div class="album-art-placeholder">~</div>`}
+              <div class="track-info">
+                <div class="track-name">${esc(s.currentTrack.name || 'Unknown')}</div>
+                <div class="track-artist">${esc(s.currentTrack.artist || 'Unknown')}</div>
+                <div class="track-position">${formatTime(posMs)}${durationMs ? ` / ${formatTime(durationMs)}` : ''}</div>
+              </div>
+            </div>
+          ` : `<div class="no-track">No track playing</div>`}
+
+          <div class="section-label">Crew (${s.members.length})</div>
+          <div class="members-list">
+            ${s.members.length === 0 ? '<div style="font-size:12px;color:var(--text2);font-style:italic">No members connected</div>' :
+              s.members.map(m => `
+                <div class="member">
+                  <div class="member-avatar" style="background:${hashColor(m.userId)}">${(m.displayName || m.userId)[0].toUpperCase()}</div>
+                  <span class="member-name">${esc(m.displayName || m.userId)}</span>
+                  ${m.userId === s.djUserId ? '<span class="member-role">DJ</span>' : ''}
+                  <span class="member-time">${timeAgo(m.joinedAt)}</span>
+                </div>
+              `).join('')}
+          </div>
+
+          <div class="section-label">Queue (${s.queue.length})</div>
+          <div class="queue-list">
+            ${s.queue.length === 0 ? '<div class="empty-queue">Queue empty</div>' :
+              s.queue.map((t, i) => `
+                <div class="queue-item">
+                  <span class="queue-num">${i + 1}</span>
+                  ${t.albumArtURL || t.albumArt
+                    ? `<img class="queue-art" src="${t.albumArtURL || t.albumArt}" alt="" onerror="this.style.display='none'">`
+                    : ''}
+                  <div class="queue-track-info">
+                    <div class="queue-track-name">${esc(t.name || t.id)}</div>
+                    <div class="queue-track-artist">${esc(t.artist || '')}</div>
+                  </div>
+                  ${t.addedBy ? `<span class="queue-added-by">by ${esc(t.addedBy.slice(0, 8))}</span>` : ''}
+                </div>
+              `).join('')}
+          </div>
+        </div>`;
+    }
+
+    function esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    async function poll() {
+      const url = getServerUrl();
+      try {
+        const resp = await fetch(`${url}/admin/sessions`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const sessions = await resp.json();
+        const serverTime = Date.now();
+
+        document.getElementById('statusDot').className = 'status-dot live';
+        document.getElementById('statusText').textContent = 'live';
+        document.getElementById('sessionCount').textContent = `${sessions.length} station${sessions.length !== 1 ? 's' : ''}`;
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+
+        // Diff and log changes
+        diffState(previousState, sessions);
+        previousState = sessions;
+
+        document.getElementById('content').innerHTML = renderSessions(sessions, serverTime);
+      } catch (err) {
+        document.getElementById('statusDot').className = 'status-dot dead';
+        document.getElementById('statusText').textContent = 'disconnected';
+        addLog('error', err.message);
+      }
+    }
+
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      const interval = parseInt(document.getElementById('pollInterval').value);
+      poll(); // immediate
+      pollTimer = setInterval(poll, interval);
+      addLog('system', `Polling ${getServerUrl()} every ${interval / 1000}s`);
+    }
+
+    // Auto-start
+    startPolling();
+  </script>
+</body>
+</html>
