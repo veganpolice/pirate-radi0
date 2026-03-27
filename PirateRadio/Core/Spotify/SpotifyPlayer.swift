@@ -26,6 +26,7 @@ final class SpotifyPlayer: NSObject, MusicSource {
     private var latencyMeasurements: [TimeInterval] = []
     private let callbackTimeout: TimeInterval = 3.0
     private var commandStartTime: Date?
+    private var hasAuthorized = false // only open Spotify app once
 
     // MARK: - SPTAppRemote
 
@@ -73,12 +74,14 @@ final class SpotifyPlayer: NSObject, MusicSource {
         appRemote.connect()
     }
 
-    /// Open the Spotify app for authorization. Call this if connect() fails
-    /// or on first launch to establish the App Remote connection.
-    func authorizeAndConnect() {
+    /// Open the Spotify app for authorization with a specific track URI.
+    /// Only called once — subsequent reconnections use connect() which doesn't app-switch.
+    func authorizeAndConnect(playURI: String = "") {
         guard !appRemote.isConnected else { return }
-        // This opens Spotify app, which triggers a redirect back with auth params
-        appRemote.authorizeAndPlayURI("", asRadio: false, additionalScopes: nil)
+        hasAuthorized = true
+        // This opens Spotify app, which triggers a redirect back with auth params.
+        // Passing the track URI makes Spotify start the right song immediately.
+        appRemote.authorizeAndPlayURI(playURI, asRadio: false, additionalScopes: nil)
     }
 
     /// Disconnect from the Spotify app. Call when the app resigns active.
@@ -167,10 +170,18 @@ final class SpotifyPlayer: NSObject, MusicSource {
 
     private func beginPlaybackSync(trackID: String, position: Duration) throws {
         guard appRemote.isConnected else {
-            // Try to connect; the pending command will be queued
-            print("[SpotifyPlayer] Not connected, attempting to connect for playback")
-            authorizeAndConnect()
+            // Queue the command to replay once connected
             pendingCommand = .play(trackID: trackID, position: position)
+
+            if hasAuthorized {
+                // Already authorized once — just reconnect (no app switch)
+                print("[SpotifyPlayer] Not connected, reconnecting (no app switch)")
+                appRemote.connect()
+            } else {
+                // First time — open Spotify with the actual track URI so it starts right
+                print("[SpotifyPlayer] Not connected, authorizing with track \(trackID)")
+                authorizeAndConnect(playURI: "spotify:track:\(trackID)")
+            }
             return
         }
 
@@ -278,16 +289,55 @@ extension SpotifyPlayer: SPTAppRemoteDelegate {
                     print("[SpotifyPlayer] Failed to subscribe to player state: \(error)")
                 }
             })
-            // Process any queued play command
-            self.processPending()
+
+            // Check what Spotify is actually playing before replaying pending command.
+            // If authorizeAndConnect already started the right track, skip the redundant play.
+            if case .play(let trackID, _) = self.pendingCommand {
+                appRemote.playerAPI?.getPlayerState { [weak self] result, _ in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        if let playerState = result as? SPTAppRemotePlayerState {
+                            let playingID = playerState.track.uri.components(separatedBy: ":").last ?? ""
+                            if playingID == trackID && !playerState.isPaused {
+                                // Already playing the right track — just update state
+                                print("[SpotifyPlayer] Track \(trackID) already playing, skipping redundant play")
+                                self.pendingCommand = nil
+                                self.state = .playing(trackID)
+                                self.playbackContinuation.yield(PlaybackState(
+                                    trackID: trackID,
+                                    isPlaying: true,
+                                    positionSeconds: Double(playerState.playbackPosition) / 1000.0,
+                                    timestamp: UInt64(Date.now.timeIntervalSince1970 * 1000)
+                                ))
+                                return
+                            }
+                        }
+                        // Different track or not playing — process the pending command
+                        self.processPending()
+                    }
+                }
+            } else {
+                self.processPending()
+            }
         }
     }
 
     nonisolated func appRemote(_ appRemote: SPTAppRemote, didFailConnectionAttemptWithError error: Error?) {
         Task { @MainActor in
             print("[SpotifyPlayer] Connection failed: \(error?.localizedDescription ?? "unknown")")
-            // If direct connect fails, try opening Spotify for authorization
-            self.authorizeAndConnect()
+            if !self.hasAuthorized {
+                // Only open Spotify app if we haven't authorized yet.
+                // Pass the pending track URI if we have one queued.
+                let uri: String
+                if case .play(let trackID, _) = self.pendingCommand {
+                    uri = "spotify:track:\(trackID)"
+                } else {
+                    uri = ""
+                }
+                self.authorizeAndConnect(playURI: uri)
+            }
+            // If already authorized, don't re-open Spotify — the user will
+            // come back to the app and applicationDidBecomeActive will reconnect.
         }
     }
 
