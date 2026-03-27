@@ -20,7 +20,9 @@ actor SyncEngine {
     private var lastProcessedSeq: UInt64 = 0
     private var preparedTrackID: String?
 
-    // Drift correction
+    // Tasks (stored for cancellation)
+    private var listeningTask: Task<Void, Never>?
+    private var monitoringTask: Task<Void, Never>?
     private var driftCheckTask: Task<Void, Never>?
     private var lastCorrectionTime: UInt64 = 0
     private let correctionCooldownMs: UInt64 = 500
@@ -81,7 +83,11 @@ actor SyncEngine {
     }
 
     func stop() async {
+        listeningTask?.cancel()
+        monitoringTask?.cancel()
         driftCheckTask?.cancel()
+        listeningTask = nil
+        monitoringTask = nil
         driftCheckTask = nil
         await transport.disconnect()
         try? await musicSource.pause()
@@ -104,6 +110,10 @@ actor SyncEngine {
         )
         try await transport.send(prepareMsg)
 
+        // Claim both sequence numbers now (before the sleep) so incoming messages
+        // during the lead-time window are correctly filtered as already-processed.
+        lastProcessedSeq += 2
+
         // Pre-warm locally
         preparedTrackID = track.id
 
@@ -124,7 +134,6 @@ actor SyncEngine {
         // Execute locally
         await executePlayCommit(trackID: track.id, startAtNtp: commitNtp, positionMs: positionMs)
 
-        lastProcessedSeq += 2
         startDriftChecking()
     }
 
@@ -205,7 +214,8 @@ actor SyncEngine {
     // MARK: - Message Processing
 
     private func startListening() {
-        Task {
+        listeningTask?.cancel()
+        listeningTask = Task {
             for await message in transport.incomingMessages {
                 await processMessage(message)
             }
@@ -439,7 +449,8 @@ actor SyncEngine {
     // MARK: - Connection Monitoring
 
     private func startConnectionMonitoring() {
-        Task {
+        monitoringTask?.cancel()
+        monitoringTask = Task {
             for await state in transport.connectionState {
                 onSessionUpdate?(.connectionStateChanged(state))
 

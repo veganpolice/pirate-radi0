@@ -331,11 +331,7 @@ final class SessionStore {
         let clock = KronosClock()
         let player = SpotifyPlayer(appRemote: authManager.appRemote)
 
-        await player.setOnTrackEnded { [weak self] in
-            Task { @MainActor in
-                await self?.skipToNext()
-            }
-        }
+        // Server timer is authoritative for queue advancement — no client-side onTrackEnded.
 
         let engine = SyncEngine(musicSource: player, transport: transport, clock: clock)
 
