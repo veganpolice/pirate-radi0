@@ -66,7 +66,7 @@ struct BeatVisualizer: View {
               store.session?.isPlaying == true,
               bpm > 0 else { return 0 }
 
-        let positionSeconds = store.currentPlaybackPosition(at: date)
+        let positionSeconds = store.currentPlaybackPosition
         let beatsElapsed = positionSeconds * (bpm / 60.0)
         return beatsElapsed.truncatingRemainder(dividingBy: 1.0)
     }

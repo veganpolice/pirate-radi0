@@ -2,9 +2,8 @@ import UIKit
 import AVFoundation
 
 class AppDelegate: NSObject, UIApplicationDelegate {
-    /// The active SpotifyPlayer, set by SessionStore when connecting to a session.
-    /// AppDelegate needs a reference for lifecycle events (active/inactive).
-    static var activePlayer: SpotifyPlayer?
+    /// Reference to auth manager, set from PirateRadioApp.
+    var authManager: SpotifyAuthManager?
 
     func application(
         _ application: UIApplication,
@@ -14,16 +13,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        #if !targetEnvironment(simulator)
-        Self.activePlayer?.connect()
-        #endif
-    }
-
-    func applicationWillResignActive(_ application: UIApplication) {
-        #if !targetEnvironment(simulator)
-        Self.activePlayer?.disconnect()
-        #endif
+    /// Handle deep link callbacks (pirate-radio://auth/callback).
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        authManager?.handleAppRemoteURL(url)
+        return true
     }
 
     /// Configure audio session for background execution.
@@ -37,24 +34,5 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         } catch {
             print("[PirateRadio] Failed to configure audio session: \(error)")
         }
-    }
-
-    // MARK: - URL Handling (Spotify OAuth + App Remote)
-
-    func application(
-        _ app: UIApplication,
-        open url: URL,
-        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
-    ) -> Bool {
-        // Try SPTAppRemote first (for App Remote authorization)
-        #if !targetEnvironment(simulator)
-        if let player = Self.activePlayer, player.handleURL(url) {
-            return true
-        }
-        #endif
-
-        // Fall through to OAuth redirect handling
-        SpotifyAuthManager.handleRedirectURL(url)
-        return true
     }
 }
