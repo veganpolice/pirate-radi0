@@ -63,6 +63,7 @@ final class SessionStore {
         playbackAnchor = nil
         session = nil
         connectionState = .disconnected
+        BackgroundAudioKeepAlive.shared.stop()
     }
 
     /// Fetch all stations from the server.
@@ -184,6 +185,11 @@ final class SessionStore {
 
         try await engine.start(sessionID: stationID, token: token)
         self.syncEngine = engine
+
+        // Start background audio keep-alive so iOS doesn't suspend the app
+        // when the screen is off. Spotify plays audio in its own process,
+        // so without this our sync engine would be killed.
+        BackgroundAudioKeepAlive.shared.start()
     }
 
     // internal for testability
@@ -196,6 +202,7 @@ final class SessionStore {
                 syncEngine = nil
                 session = nil
                 error = .sessionNotFound
+                BackgroundAudioKeepAlive.shared.stop()
             }
         case .syncStatus(let status):
             syncStatus = status
