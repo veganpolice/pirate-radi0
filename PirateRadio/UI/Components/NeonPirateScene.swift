@@ -11,6 +11,16 @@ struct NeonPirateScene: View {
     @State private var bobPhase: Bool = false
     @State private var sailPulse: Bool = false
 
+    /// Pre-computed ship layout to avoid O(n²) filtering inside ForEach.
+    private var shipLayout: [(member: Session.Member, isDJ: Bool, nonDJIndex: Int, nonDJCount: Int)] {
+        let nonDJ = members.filter { $0.id != djUserID }
+        return members.map { member in
+            let isDJ = member.id == djUserID
+            let idx = nonDJ.firstIndex(where: { $0.id == member.id }) ?? 0
+            return (member, isDJ, idx, max(nonDJ.count, 1))
+        }
+    }
+
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
@@ -20,21 +30,19 @@ struct NeonPirateScene: View {
                 mountains(w: w, h: h)
                 waterLine(w: w, h: h)
 
-                ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-                    let isDJ = member.id == djUserID
-                    let nonDJIndex = members.filter { $0.id != djUserID }.firstIndex(where: { $0.id == member.id })
-                    let nonDJCount = max(members.filter { $0.id != djUserID }.count, 1)
+                ForEach(shipLayout, id: \.member.id) { layout in
                     SailingShip(
-                        color: member.avatarColor.color,
-                        cycleOffset: isDJ ? 0 : spacedOffset(index: nonDJIndex ?? 0, total: nonDJCount, id: member.id),
-                        cycleDuration: stableSpeed(for: member.id),
+                        color: layout.member.avatarColor.color,
+                        cycleOffset: layout.isDJ ? 0 : spacedOffset(index: layout.nonDJIndex, total: layout.nonDJCount, id: layout.member.id),
+                        cycleDuration: stableSpeed(for: layout.member.id),
                         sceneWidth: w,
                         bobPhase: bobPhase,
                         sailPulse: sailPulse,
-                        immediate: isDJ
+                        immediate: layout.isDJ
                     )
-                    .frame(width: isDJ ? 52 : 38, height: isDJ ? 44 : 32)
-                    .position(x: w * 0.5, y: h * (isDJ ? 0.64 : 0.68))
+                    .frame(width: layout.isDJ ? 52 : 38, height: layout.isDJ ? 44 : 32)
+                    .drawingGroup()
+                    .position(x: w * 0.5, y: h * (layout.isDJ ? 0.64 : 0.68))
                 }
             }
         }

@@ -15,6 +15,8 @@ struct NowPlayingView: View {
     @State private var chairliftMode = false
 
     @State private var isMuted = false
+    @State private var seekBackTrigger = false
+    @State private var skipTrigger = false
 
     // Staggered entrance
     @State private var showArt = false
@@ -303,13 +305,14 @@ struct NowPlayingView: View {
         HStack(spacing: 20) {
             // Seek back
             Button {
+                seekBackTrigger.toggle()
                 Task { await sessionStore.seek(to: 0) }
             } label: {
                 Image(systemName: "backward.fill")
                     .font(.title2)
             }
             .frame(minWidth: 52, minHeight: 52)
-            .sensoryFeedback(.impact(weight: .light), trigger: UUID())
+            .sensoryFeedback(.impact(weight: .light), trigger: seekBackTrigger)
 
             // Mute / Unmute (main button)
             Button {
@@ -351,6 +354,7 @@ struct NowPlayingView: View {
 
             // Skip
             Button {
+                skipTrigger.toggle()
                 if PirateRadioApp.demoMode {
                     sessionStore.demoSkipToNext()
                 } else {
@@ -362,7 +366,7 @@ struct NowPlayingView: View {
             }
             .disabled(sessionStore.session?.queue.isEmpty != false)
             .frame(minWidth: 52, minHeight: 52)
-            .sensoryFeedback(.impact(weight: .light), trigger: UUID())
+            .sensoryFeedback(.impact(weight: .light), trigger: skipTrigger)
         }
         .foregroundStyle(PirateTheme.broadcast)
         .padding(.vertical, 8)
