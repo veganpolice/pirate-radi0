@@ -132,6 +132,60 @@ function waitForMessage(messages, predicate, timeoutMs = 5000) {
   });
 }
 
+/** Connect WS and capture both JSON messages and binary frames separately. */
+function connectWSWithBinary(port, token, stationId) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${port}/?token=${token}&sessionId=${stationId}`
+    );
+    const messages = [];
+    const binaryFrames = [];
+    ws.on("open", () => resolve({ ws, messages, binaryFrames }));
+    ws.on("message", (raw, isBinary) => {
+      if (isBinary) {
+        binaryFrames.push(Buffer.from(raw));
+      } else {
+        messages.push(JSON.parse(raw.toString()));
+      }
+    });
+    ws.on("error", reject);
+  });
+}
+
+/** Build a voice clip binary frame: 4-byte header + JSON metadata + fake audio. */
+function buildVoiceClipFrame(metadata, audioSize = 1000) {
+  const json = Buffer.from(JSON.stringify(metadata), "utf8");
+  const header = Buffer.alloc(4);
+  header.writeUInt32BE(json.length, 0);
+  const audio = Buffer.alloc(audioSize, 0xAA); // fake audio bytes
+  return Buffer.concat([header, json, audio]);
+}
+
+/** Wait for a binary frame to arrive. */
+function waitForBinaryFrame(binaryFrames, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error(`Timed out waiting for binary frame (have ${binaryFrames.length})`)),
+      timeoutMs
+    );
+    const interval = setInterval(() => {
+      if (binaryFrames.length > 0) {
+        clearTimeout(timeout);
+        clearInterval(interval);
+        resolve(binaryFrames[binaryFrames.length - 1]);
+      }
+    }, 50);
+  });
+}
+
+/** Parse a received voice clip binary frame into { metadata, audioData }. */
+function parseVoiceClipFrame(buffer) {
+  const jsonLen = buffer.readUInt32BE(0);
+  const metadata = JSON.parse(buffer.slice(4, 4 + jsonLen).toString("utf8"));
+  const audioData = buffer.slice(4 + jsonLen);
+  return { metadata, audioData };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -553,6 +607,160 @@ describe("Pirate Radio — Public Stations", () => {
       assert.ok(station.id);
       assert.ok(station.name);
       assert.ok(Array.isArray(station.members));
+    });
+  });
+
+  // ----- Voice Clips -----
+
+  describe("Voice Clips", () => {
+    it("relays a voice clip binary frame to other members", async () => {
+      const token1 = await getToken(PORT, "vc-sender", "Sender");
+      const token2 = await getToken(PORT, "vc-receiver", "Receiver");
+
+      const stations = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token1}` },
+      });
+      const stationId = stations.body.stations[0].id;
+
+      const sender = await connectWSWithBinary(PORT, token1, stationId);
+      const receiver = await connectWSWithBinary(PORT, token2, stationId);
+
+      // Wait for memberJoined messages to settle
+      await new Promise((r) => setTimeout(r, 200));
+
+      const frame = buildVoiceClipFrame(
+        { type: "voiceClip", clipId: "clip-1", durationMs: 3000 },
+        2000
+      );
+      sender.ws.send(frame);
+
+      const received = await waitForBinaryFrame(receiver.binaryFrames);
+      const { metadata, audioData } = parseVoiceClipFrame(received);
+
+      assert.equal(metadata.type, "voiceClip");
+      assert.equal(metadata.clipId, "clip-1");
+      assert.equal(metadata.durationMs, 3000);
+      assert.equal(metadata.senderId, "vc-sender");
+      assert.equal(metadata.senderName, "Sender");
+      assert.equal(audioData.length, 2000);
+      // Verify audio bytes are the same
+      assert.ok(audioData.every((b) => b === 0xAA));
+
+      sender.ws.close();
+      receiver.ws.close();
+    });
+
+    it("does not relay voice clip back to sender", async () => {
+      const token1 = await getToken(PORT, "vc-echo-sender", "EchoSender");
+
+      const stations = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token1}` },
+      });
+      const stationId = stations.body.stations[0].id;
+
+      const sender = await connectWSWithBinary(PORT, token1, stationId);
+      await new Promise((r) => setTimeout(r, 200));
+
+      const frame = buildVoiceClipFrame(
+        { type: "voiceClip", clipId: "clip-echo", durationMs: 1000 },
+        500
+      );
+      sender.ws.send(frame);
+
+      // Wait a bit and confirm no binary frame received by sender
+      await new Promise((r) => setTimeout(r, 500));
+      assert.equal(sender.binaryFrames.length, 0);
+
+      sender.ws.close();
+    });
+
+    it("rate limits voice clips to one per 15 seconds", async () => {
+      const token1 = await getToken(PORT, "vc-rl-sender", "RLSender");
+      const token2 = await getToken(PORT, "vc-rl-receiver", "RLReceiver");
+
+      const stations = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token1}` },
+      });
+      const stationId = stations.body.stations[0].id;
+
+      const sender = await connectWSWithBinary(PORT, token1, stationId);
+      const receiver = await connectWSWithBinary(PORT, token2, stationId);
+      await new Promise((r) => setTimeout(r, 200));
+
+      // First clip should go through
+      const frame1 = buildVoiceClipFrame(
+        { type: "voiceClip", clipId: "clip-rl-1", durationMs: 1000 },
+        500
+      );
+      sender.ws.send(frame1);
+      await waitForBinaryFrame(receiver.binaryFrames);
+      assert.equal(receiver.binaryFrames.length, 1);
+
+      // Second clip immediately should be rate limited
+      const frame2 = buildVoiceClipFrame(
+        { type: "voiceClip", clipId: "clip-rl-2", durationMs: 1000 },
+        500
+      );
+      sender.ws.send(frame2);
+
+      // Wait and confirm only 1 binary frame arrived
+      await new Promise((r) => setTimeout(r, 500));
+      assert.equal(receiver.binaryFrames.length, 1);
+
+      sender.ws.close();
+      receiver.ws.close();
+    });
+
+    it("rejects oversized voice clips", async () => {
+      const token1 = await getToken(PORT, "vc-big-sender", "BigSender");
+      const token2 = await getToken(PORT, "vc-big-receiver", "BigReceiver");
+
+      const stations = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token1}` },
+      });
+      const stationId = stations.body.stations[0].id;
+
+      const sender = await connectWSWithBinary(PORT, token1, stationId);
+      const receiver = await connectWSWithBinary(PORT, token2, stationId);
+      await new Promise((r) => setTimeout(r, 200));
+
+      // 70KB frame — over the 60KB limit
+      const frame = buildVoiceClipFrame(
+        { type: "voiceClip", clipId: "clip-big", durationMs: 5000 },
+        70000
+      );
+      sender.ws.send(frame);
+
+      // Wait and confirm no binary frame arrived
+      await new Promise((r) => setTimeout(r, 500));
+      assert.equal(receiver.binaryFrames.length, 0);
+
+      sender.ws.close();
+      receiver.ws.close();
+    });
+
+    it("ignores malformed binary frames", async () => {
+      const token1 = await getToken(PORT, "vc-bad-sender", "BadSender");
+      const token2 = await getToken(PORT, "vc-bad-receiver", "BadReceiver");
+
+      const stations = await request(PORT, "GET", "/stations", {
+        headers: { Authorization: `Bearer ${token1}` },
+      });
+      const stationId = stations.body.stations[0].id;
+
+      const sender = await connectWSWithBinary(PORT, token1, stationId);
+      const receiver = await connectWSWithBinary(PORT, token2, stationId);
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Send garbage binary
+      sender.ws.send(Buffer.from([0x00, 0x01, 0x02]));
+
+      // Wait and confirm no binary frame arrived
+      await new Promise((r) => setTimeout(r, 500));
+      assert.equal(receiver.binaryFrames.length, 0);
+
+      sender.ws.close();
+      receiver.ws.close();
     });
   });
 });

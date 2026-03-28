@@ -19,6 +19,9 @@ const MAX_TRACK_DURATION_MS = 30 * 60 * 1000; // 30 minutes — clamp for timer 
 const MAX_QUEUE_SIZE = 100;
 const MAX_HISTORY_SIZE = 200; // cap history to prevent unbounded memory growth
 const SKIP_COOLDOWN_MS = 3_000; // 1 skip per 3 seconds per station
+const VOICE_CLIP_MAX_BYTES = 60_000; // 60KB max for a single voice clip frame
+const VOICE_CLIP_COOLDOWN_MS = 15_000; // 1 clip per 15 seconds per user
+const VOICE_CLIP_MAX_DURATION_MS = 10_000; // 10 seconds max recording
 
 // --- In-Memory State ---
 
@@ -276,7 +279,13 @@ wss.on("connection", (ws) => {
   }, userId);
 
   // Handle messages
-  ws.on("message", (raw) => {
+  ws.on("message", (raw, isBinary) => {
+    // Voice clip: single binary frame with 4-byte length-prefixed JSON header + audio
+    if (isBinary) {
+      handleVoiceClip(station, userId, displayName, raw);
+      return;
+    }
+
     let msg;
     try {
       msg = JSON.parse(raw);
@@ -363,6 +372,71 @@ function handleMessage(station, senderId, msg) {
         }));
       }
       break;
+    }
+  }
+}
+
+// --- Voice Clip Handling ---
+
+function handleVoiceClip(station, senderId, displayName, raw) {
+  // Validate minimum size: 4-byte header + at least 1 byte JSON + 1 byte audio
+  if (raw.length < 6) return;
+  if (raw.length > VOICE_CLIP_MAX_BYTES) {
+    console.log(`[voiceClip] Rejected from ${displayName}: too large (${raw.length} bytes)`);
+    return;
+  }
+
+  const member = station.members.get(senderId);
+  if (!member) return;
+
+  // Rate limit
+  const now = Date.now();
+  if (member.lastVoiceClipTime && now - member.lastVoiceClipTime < VOICE_CLIP_COOLDOWN_MS) {
+    console.log(`[voiceClip] Rate limited ${displayName}`);
+    return;
+  }
+
+  // Parse header: first 4 bytes = uint32 BE JSON length
+  const jsonLen = raw.readUInt32BE(0);
+  if (jsonLen < 2 || jsonLen > 1024 || 4 + jsonLen >= raw.length) return;
+
+  let metadata;
+  try {
+    metadata = JSON.parse(raw.slice(4, 4 + jsonLen).toString("utf8"));
+  } catch {
+    return;
+  }
+
+  if (metadata.type !== "voiceClip") return;
+  if (!metadata.clipId || String(metadata.clipId).length > 64) return;
+
+  const durationMs = Number(metadata.durationMs);
+  if (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > VOICE_CLIP_MAX_DURATION_MS) return;
+
+  // Inject server-authoritative sender info
+  metadata.senderId = senderId;
+  metadata.senderName = displayName;
+
+  // Repack with injected fields
+  const newJson = Buffer.from(JSON.stringify(metadata), "utf8");
+  const newHeader = Buffer.alloc(4);
+  newHeader.writeUInt32BE(newJson.length, 0);
+  const audioData = raw.slice(4 + jsonLen);
+  const repacked = Buffer.concat([newHeader, newJson, audioData]);
+
+  // Set rate limit on successful relay
+  member.lastVoiceClipTime = now;
+
+  console.log(`[voiceClip] ${displayName}: ${durationMs}ms, ${audioData.length} bytes audio`);
+
+  broadcastBinaryToStation(station, repacked, senderId);
+}
+
+function broadcastBinaryToStation(station, buffer, excludeUserId = null) {
+  for (const [userId, member] of station.members) {
+    if (userId === excludeUserId) continue;
+    if (member.ws.readyState === 1) {
+      member.ws.send(buffer);
     }
   }
 }
