@@ -136,6 +136,7 @@ app.get("/admin/stations", (_req, res) => {
       positionTimestamp: station.positionTimestamp,
       queue: station.queue,
       historyLength: station.history.length,
+      listeners: [], // Listener tracking removed; empty array keeps monitor dashboard compatible
     });
   }
   res.json({ stations: result, serverTime: Date.now() });

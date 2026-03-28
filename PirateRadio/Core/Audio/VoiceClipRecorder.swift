@@ -53,7 +53,10 @@ actor VoiceClipRecorder {
             .appendingPathExtension("m4a")
 
         let rec = try AVAudioRecorder(url: url, settings: Self.recordingSettings)
-        rec.record()
+        guard rec.record() else {
+            try? FileManager.default.removeItem(at: url)
+            throw RecordingError.recordingFailed
+        }
         self.recorder = rec
         self.recordingStartTime = Date()
 

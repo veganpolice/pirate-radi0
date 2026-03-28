@@ -20,7 +20,10 @@ final class VoiceClipPlayer: NSObject, AVAudioPlayerDelegate {
 
             let player = try AVAudioPlayer(data: data)
             player.delegate = self
-            player.play()
+            guard player.play() else {
+                restoreAudioSession()
+                return
+            }
             self.audioPlayer = player
             self.currentlyPlayingSender = senderName
         } catch {
