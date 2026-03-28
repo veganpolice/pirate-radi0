@@ -18,8 +18,15 @@ final class SessionStore {
 
     var currentBPM: Double? { nil }
 
-    // TODO: expose anchor from SyncEngine for beat-phase computation
-    var currentPlaybackPosition: Double { 0 }
+    // Playback anchor from the last stateSync — used to compute current position
+    private(set) var playbackAnchor: NTPAnchoredPosition?
+    private var clock: (any ClockProvider)?
+
+    /// Current playback position in seconds, computed from the NTP-anchored position.
+    var currentPlaybackPosition: Double {
+        guard let anchor = playbackAnchor, let clock else { return 0 }
+        return anchor.positionAt(ntpTime: clock.now())
+    }
 
     // MARK: - Dial Home State
 
@@ -129,6 +136,8 @@ final class SessionStore {
     func leaveSession() async {
         await syncEngine?.stop()
         syncEngine = nil
+        clock = nil
+        playbackAnchor = nil
         session = nil
         isCreator = false
         connectionState = .disconnected
@@ -337,6 +346,7 @@ final class SessionStore {
     private func connectToSession(sessionID: String, token: String) async throws {
         let transport = WebSocketTransport(baseURL: baseURL)
         let clock = KronosClock()
+        self.clock = clock
         let player = SpotifyPlayer(appRemote: authManager.appRemote)
 
         // Server timer is authoritative for queue advancement — no client-side onTrackEnded.
@@ -433,6 +443,16 @@ final class SessionStore {
         // Update playback state
         session?.isPlaying = snapshot.playbackRate > 0
         session?.epoch = snapshot.epoch
+
+        // Store anchor so UI can compute current playback position
+        if let trackID = snapshot.trackID {
+            playbackAnchor = NTPAnchoredPosition(
+                trackID: trackID,
+                positionAtAnchor: snapshot.positionAtAnchor,
+                ntpAnchor: snapshot.ntpAnchor,
+                playbackRate: snapshot.playbackRate
+            )
+        }
 
         // Update current track from snapshot if available
         if let track = snapshot.currentTrack {

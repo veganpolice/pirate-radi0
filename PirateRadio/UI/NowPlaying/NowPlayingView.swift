@@ -106,7 +106,7 @@ struct NowPlayingView: View {
             if showProgress, let track = sessionStore.session?.currentTrack {
                 TrackProgressBar(
                     durationMs: track.durationMs,
-                    initialPositionMs: 0,
+                    initialPositionMs: sessionStore.currentPlaybackPosition * 1000,
                     isPlaying: sessionStore.session?.isPlaying ?? false,
                     isDJ: sessionStore.isDJ
                 ) { seekPos in
