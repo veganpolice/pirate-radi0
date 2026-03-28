@@ -64,7 +64,9 @@ struct WalkieTalkieButton: View {
                         )
                 )
                 .sensoryFeedback(.impact(weight: .medium), trigger: isRecording)
+                .animation(.linear(duration: 0.15), value: recordingProgress)
         }
+        .animation(.easeInOut(duration: 0.15), value: waveformLevels)
     }
 
     private var recordingIndicator: some View {
@@ -120,30 +122,18 @@ struct WalkieTalkieButton: View {
         isRecording = true
         recordingProgress = 0
 
-        // Animate waveform
-        let waveTask = Task {
-            while !Task.isCancelled && isRecording {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    waveformLevels = (0..<7).map { _ in CGFloat.random(in: 0.15...1.0) }
-                }
-                try? await Task.sleep(for: .milliseconds(150))
-            }
-        }
-
-        // Animate progress
-        let progressTask = Task {
-            let steps = 100
-            for i in 0...steps {
+        // Single consolidated loop: waveform + progress on 150ms tick
+        Task {
+            let tickInterval: Double = 0.15
+            let totalTicks = Int(maxRecordingSeconds / tickInterval)
+            for tick in 0...totalTicks {
                 guard !Task.isCancelled && isRecording else { break }
-                withAnimation(.linear(duration: maxRecordingSeconds / Double(steps))) {
-                    recordingProgress = Double(i) / Double(steps)
-                }
-                try? await Task.sleep(for: .seconds(maxRecordingSeconds / Double(steps)))
+                waveformLevels = (0..<7).map { _ in CGFloat.random(in: 0.15...1.0) }
+                recordingProgress = Double(tick) / Double(totalTicks)
+                try? await Task.sleep(for: .seconds(tickInterval))
             }
             if isRecording { stopRecording() }
         }
-
-        _ = (waveTask, progressTask)
     }
 
     private func stopRecording() {

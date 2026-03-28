@@ -77,25 +77,21 @@ struct BeatPulseBackground: View {
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
-        .task {
-            // Slow BPM drift
-            while !Task.isCancelled {
-                if isPlaying {
-                    let newBPM = Double.random(in: 85...160)
-                    withAnimation(.easeInOut(duration: Double.random(in: 6...14))) {
-                        bpm = newBPM
-                    }
-                }
-                try? await Task.sleep(for: .seconds(Double.random(in: 6...14)))
-            }
-        }
+        .animation(.easeInOut(duration: 8), value: bpm)
         .task(id: isPlaying) {
             guard isPlaying else { return }
-            // Slow breathe cycle + spawn rings at a random ship's position
+            var tickCount = 0
+            // Single consolidated loop: breathe + ring spawn every tick,
+            // BPM drift every 3rd tick (~9s)
             while !Task.isCancelled {
-                withAnimation(.easeInOut(duration: Double.random(in: 6...10))) {
-                    breathePhase.toggle()
+                breathePhase.toggle()
+
+                // BPM drift every 3rd tick
+                tickCount += 1
+                if tickCount % 3 == 0 {
+                    bpm = Double.random(in: 85...160)
                 }
+
                 // Spawn a ring from a member's ship
                 if !members.isEmpty {
                     let screenW = UIScreen.main.bounds.width
@@ -115,7 +111,7 @@ struct BeatPulseBackground: View {
                         spawnedRings.removeFirst(spawnedRings.count - 6)
                     }
                 }
-                try? await Task.sleep(for: .seconds(Double.random(in: 2...3.5)))
+                try? await Task.sleep(for: .seconds(Double.random(in: 2.5...3.5)))
             }
         }
     }
@@ -135,11 +131,12 @@ struct BeatPulseBackground: View {
             )
             .frame(height: size.height * 0.4)
             .offset(y: scanOffset * size.height)
+            .animation(.linear(duration: 6), value: scanOffset)
             .task {
+                // Stagger start so scan line doesn't wake with the main loop
+                try? await Task.sleep(for: .seconds(1.5))
                 while !Task.isCancelled {
-                    withAnimation(.linear(duration: 6)) {
-                        scanOffset = 1
-                    }
+                    scanOffset = 1
                     try? await Task.sleep(for: .seconds(6))
                     scanOffset = -1
                     try? await Task.sleep(for: .seconds(Double.random(in: 2...5)))
