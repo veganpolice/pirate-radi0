@@ -61,7 +61,7 @@ struct DiscoveryView: View {
                 .neonGlow(PirateTheme.signal, intensity: 0.5)
                 .contentTransition(.numericText())
 
-            FrequencyDial(value: $dialValue, color: PirateTheme.signal)
+            VolumeKnob(value: $dialValue, color: PirateTheme.signal)
                 .frame(width: 140, height: 140)
                 .onChange(of: dialValue) { _, _ in
                     // Flash static when tuning

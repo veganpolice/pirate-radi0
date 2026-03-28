@@ -1,45 +1,42 @@
 import SwiftUI
 
-/// The radio dial home screen. Auto-tunes on appear, shows live stations
-/// as notches on the dial, and offers a "Start Broadcasting" CTA.
+/// The radio dial home screen. Snap between 5 fixed stations,
+/// then tap "Tune In" to join.
 struct DialHomeView: View {
     @Environment(SessionStore.self) private var sessionStore
 
-    @State private var dialValue: Double = 0.5
+    @State private var selectedStationIndex: Int = 0
+
+    /// The station the dial is currently pointing at.
+    private var selectedStation: Station? {
+        guard !sessionStore.stations.isEmpty else { return nil }
+        let idx = min(max(selectedStationIndex, 0), sessionStore.stations.count - 1)
+        return sessionStore.stations[idx]
+    }
 
     var body: some View {
         ZStack {
             PirateTheme.void.ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 Spacer()
 
                 // Tuning header
                 tuningHeader
 
-                // The dial with live station notches
+                // The dial — snaps between station detents only
                 FrequencyDial(
-                    value: $dialValue,
                     color: PirateTheme.signal,
                     stations: sessionStore.stations,
-                    onTuneToStation: { station in
-                        sessionStore.tuneToStation(station)
-                    }
+                    selectedIndex: $selectedStationIndex
                 )
                 .padding(.horizontal, 24)
 
-                // "My Broadcast" button
-                Button {
-                    Task { await startBroadcasting() }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                        Text("My Broadcast")
-                    }
-                    .frame(maxWidth: .infinity)
+                // "Tune In" button — always visible when a station is selected
+                if let station = selectedStation {
+                    tuneInButton(station: station)
+                        .padding(.horizontal, 32)
                 }
-                .buttonStyle(GloveButtonStyle(color: PirateTheme.broadcast))
-                .padding(.horizontal, 24)
 
                 if let error = sessionStore.error {
                     Text(error.errorDescription ?? "Something went wrong")
@@ -53,10 +50,15 @@ struct DialHomeView: View {
             }
         }
         .task {
-            await sessionStore.autoTune()
+            await sessionStore.fetchStations()
+            // Restore last-tuned station index
+            if let lastId = UserDefaults.standard.string(forKey: "lastTunedStationId"),
+               let idx = sessionStore.stations.firstIndex(where: { $0.id == lastId }) {
+                selectedStationIndex = idx
+            }
         }
         .onChange(of: sessionStore.session) { oldValue, newValue in
-            // Re-fetch stations when returning from a session (e.g. leaving NowPlayingView)
+            // Re-fetch stations when returning from a session
             if oldValue != nil && newValue == nil {
                 Task { await sessionStore.fetchStations() }
             }
@@ -75,17 +77,6 @@ struct DialHomeView: View {
                     .font(PirateTheme.body(16))
                     .foregroundStyle(PirateTheme.signal)
             }
-        } else if sessionStore.stations.isEmpty {
-            VStack(spacing: 8) {
-                Text("PIRATE RADIO")
-                    .font(PirateTheme.display(28))
-                    .foregroundStyle(PirateTheme.signal)
-                    .neonGlow(PirateTheme.signal, intensity: 0.5)
-
-                Text("Nobody's on right now")
-                    .font(PirateTheme.body(14))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
         } else {
             VStack(spacing: 8) {
                 Text("PIRATE RADIO")
@@ -93,19 +84,34 @@ struct DialHomeView: View {
                     .foregroundStyle(PirateTheme.signal)
                     .neonGlow(PirateTheme.signal, intensity: 0.5)
 
-                Text("\(sessionStore.stations.count) station\(sessionStore.stations.count == 1 ? "" : "s") live")
-                    .font(PirateTheme.body(14))
-                    .foregroundStyle(.white.opacity(0.5))
+                if !sessionStore.stations.isEmpty {
+                    Text("\(sessionStore.stations.count) stations on air")
+                        .font(PirateTheme.body(14))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
             }
         }
     }
 
-    // MARK: - Actions
-
-    private func startBroadcasting() async {
-        if sessionStore.session != nil {
-            await sessionStore.leaveSession()
+    private func tuneInButton(station: Station) -> some View {
+        Button {
+            sessionStore.tuneToStation(station)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                Text("Tune In")
+                    .font(PirateTheme.display(18))
+            }
+            .foregroundStyle(PirateTheme.void)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(PirateTheme.signal)
+            )
+            .neonGlow(PirateTheme.signal, intensity: 0.4)
         }
-        await sessionStore.createSession()
+        .sensoryFeedback(.impact(weight: .medium), trigger: sessionStore.isLoading)
+        .disabled(sessionStore.isLoading)
     }
 }

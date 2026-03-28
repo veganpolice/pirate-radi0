@@ -2,11 +2,9 @@ import Foundation
 
 /// The sync engine coordinates playback across devices using NTP-anchored timing.
 ///
-/// Architecture:
-/// - Two-phase coordinated play: PREPARE (pre-warm track) → COMMIT (play at NTP time)
-/// - Three-tier drift correction: IGNORE (<50ms) → RATE ADJUST (50-500ms) → HARD SEEK (>500ms)
-/// - Per-device latency calibration from the first 3 play commands
-/// - Monotonic sequence numbers + epochs prevent stale/duplicate execution
+/// In the public station model, all playback is server-driven via stateSync messages.
+/// Clients only send: skip, addToQueue. The server handles queue advancement and
+/// broadcasts stateSync with the current track and position.
 actor SyncEngine {
     // MARK: - Dependencies
 
@@ -18,7 +16,6 @@ actor SyncEngine {
 
     private var currentEpoch: UInt64 = 0
     private var lastProcessedSeq: UInt64 = 0
-    private var preparedTrackID: String?
 
     // Tasks (stored for cancellation)
     private var listeningTask: Task<Void, Never>?
@@ -27,18 +24,11 @@ actor SyncEngine {
     private var lastCorrectionTime: UInt64 = 0
     private let correctionCooldownMs: UInt64 = 500
 
-    // Latency calibration
-    private var playLatencySamples: [TimeInterval] = []
-    private var calibratedLatency: TimeInterval { averageLatency ?? 0.3 }
-
-    private var averageLatency: TimeInterval? {
-        guard !playLatencySamples.isEmpty else { return nil }
-        let recent = playLatencySamples.suffix(5)
-        return recent.reduce(0, +) / Double(recent.count)
-    }
-
     // Current playback anchor
     private var currentAnchor: NTPAnchoredPosition?
+
+    // Local mute — pauses Spotify without affecting the server session
+    private var isLocallyMuted = false
 
     // Session store callback
     var onSessionUpdate: ((SessionUpdate) -> Void)?
@@ -93,100 +83,22 @@ actor SyncEngine {
         try? await musicSource.pause()
     }
 
-    // MARK: - DJ Actions (only called by the DJ device)
+    // MARK: - Local Mute
 
-    func djPlay(track: Track, positionMs: Int = 0) async throws {
-        let now = clock.now()
-        let leadTime: UInt64 = 1500 // ms
-        let commitTime = now + leadTime
-
-        // Phase 1: PREPARE — tell everyone to pre-warm the track
-        let prepareMsg = SyncMessage(
-            id: UUID(),
-            type: .playPrepare(trackID: track.id, prepareDeadline: commitTime),
-            sequenceNumber: lastProcessedSeq + 1,
-            epoch: currentEpoch,
-            timestamp: now
-        )
-        try await transport.send(prepareMsg)
-
-        // Claim both sequence numbers now (before the sleep) so incoming messages
-        // during the lead-time window are correctly filtered as already-processed.
-        lastProcessedSeq += 2
-
-        // Pre-warm locally
-        preparedTrackID = track.id
-
-        // Wait for lead time
-        try await Task.sleep(for: .milliseconds(Int(leadTime)))
-
-        // Phase 2: COMMIT — play at exact NTP time
-        let commitNtp = clock.now() + 200 // tiny buffer for message transit
-        let commitMsg = SyncMessage(
-            id: UUID(),
-            type: .playCommit(trackID: track.id, startAtNtp: commitNtp, refSeq: prepareMsg.sequenceNumber),
-            sequenceNumber: lastProcessedSeq,
-            epoch: currentEpoch,
-            timestamp: clock.now()
-        )
-        try await transport.send(commitMsg)
-
-        // Execute locally
-        await executePlayCommit(trackID: track.id, startAtNtp: commitNtp, positionMs: positionMs)
-
-        startDriftChecking()
+    func toggleLocalMute() async {
+        isLocallyMuted.toggle()
+        if isLocallyMuted {
+            driftCheckTask?.cancel()
+            try? await musicSource.pause()
+        } else if let anchor = currentAnchor, anchor.playbackRate > 0 {
+            let now = clock.now()
+            let pos = anchor.positionAt(ntpTime: now)
+            try? await musicSource.play(trackID: anchor.trackID, at: .seconds(pos))
+            startDriftChecking()
+        }
     }
 
-    func djPause() async throws {
-        let now = clock.now()
-        let msg = SyncMessage(
-            id: UUID(),
-            type: .pause(atNtp: now + 100),
-            sequenceNumber: lastProcessedSeq + 1,
-            epoch: currentEpoch,
-            timestamp: now
-        )
-        try await transport.send(msg)
-        lastProcessedSeq += 1
-
-        try await musicSource.pause()
-        driftCheckTask?.cancel()
-        onSessionUpdate?(.playbackStateChanged(isPlaying: false, positionMs: 0))
-    }
-
-    func djResume() async throws {
-        let now = clock.now()
-        let resumeAt = now + 1500
-        let msg = SyncMessage(
-            id: UUID(),
-            type: .resume(atNtp: resumeAt),
-            sequenceNumber: lastProcessedSeq + 1,
-            epoch: currentEpoch,
-            timestamp: now
-        )
-        try await transport.send(msg)
-        lastProcessedSeq += 1
-
-        await schedulePlayAt(ntpTime: resumeAt)
-        startDriftChecking()
-    }
-
-    func djSeek(to positionMs: Int) async throws {
-        let now = clock.now()
-        let msg = SyncMessage(
-            id: UUID(),
-            type: .seek(positionMs: positionMs, atNtp: now + 200),
-            sequenceNumber: lastProcessedSeq + 1,
-            epoch: currentEpoch,
-            timestamp: now
-        )
-        try await transport.send(msg)
-        lastProcessedSeq += 1
-
-        try await musicSource.seek(to: .milliseconds(positionMs))
-    }
-
-    // MARK: - Queue Actions
+    // MARK: - Actions (available to all users)
 
     func sendAddToQueue(track: Track) async {
         let nonce = UUID().uuidString
@@ -245,36 +157,12 @@ actor SyncEngine {
         lastProcessedSeq = message.sequenceNumber
 
         switch message.type {
-        case .playPrepare(let trackID, _):
-            // Pre-warm: just record that we should be ready for this track
-            preparedTrackID = trackID
-
-        case .playCommit(let trackID, let startAtNtp, _):
-            await executePlayCommit(trackID: trackID, startAtNtp: startAtNtp, positionMs: 0)
-            startDriftChecking()
-
-        case .pause:
-            try? await musicSource.pause()
-            driftCheckTask?.cancel()
-            onSessionUpdate?(.playbackStateChanged(isPlaying: false, positionMs: 0))
-
-        case .resume(let atNtp):
-            await schedulePlayAt(ntpTime: atNtp)
-            startDriftChecking()
-
-        case .seek(let positionMs, _):
-            try? await musicSource.seek(to: .milliseconds(positionMs))
-
         case .skip:
-            // Handled by the queue system
+            // Server handles skip and sends stateSync
             break
 
         case .addToQueue:
-            // Client-originated; server handles and broadcasts queueUpdate
-            break
-
-        case .driftReport:
-            // DJ receives drift reports from listeners — monitoring only
+            // Server handles and broadcasts queueUpdate
             break
 
         case .stateSync:
@@ -291,49 +179,60 @@ actor SyncEngine {
         }
     }
 
-    // MARK: - Playback Execution
+    // MARK: - State Sync (server-driven playback)
 
-    private func executePlayCommit(trackID: String, startAtNtp: UInt64, positionMs: Int) async {
-        let now = clock.now()
-        let waitMs = Int64(startAtNtp) - Int64(now) - Int64(calibratedLatency * 1000)
+    private func handleStateSync(_ snapshot: SessionSnapshot) async {
+        currentEpoch = snapshot.epoch
+        lastProcessedSeq = snapshot.sequenceNumber
 
-        if waitMs > 0 {
-            try? await Task.sleep(for: .milliseconds(waitMs))
+        // Transition out of resyncing once we have a fresh stateSync
+        onSessionUpdate?(.connectionStateChanged(.connected))
+
+        guard let trackID = snapshot.trackID else {
+            // Station is idle — stop playback
+            driftCheckTask?.cancel()
+            try? await musicSource.pause()
+            currentAnchor = nil
+            onSessionUpdate?(.playbackStateChanged(isPlaying: false, positionMs: 0))
+            return
         }
 
-        // Measure latency
-        let startTime = ProcessInfo.processInfo.systemUptime
+        let now = clock.now()
+        let currentPositionSec = snapshot.positionAtAnchor +
+            (Double(now - snapshot.ntpAnchor) / 1000.0) * snapshot.playbackRate
 
-        let position = Duration.milliseconds(positionMs)
-        try? await musicSource.play(trackID: trackID, at: position)
-
-        let elapsed = ProcessInfo.processInfo.systemUptime - startTime
-        playLatencySamples.append(elapsed)
-        if playLatencySamples.count > 10 {
-            playLatencySamples.removeFirst()
+        if snapshot.playbackRate > 0 {
+            if !isLocallyMuted {
+                try? await musicSource.play(
+                    trackID: trackID,
+                    at: .seconds(currentPositionSec)
+                )
+                startDriftChecking()
+            }
+            onSessionUpdate?(.playbackStateChanged(isPlaying: true, positionMs: Int(currentPositionSec * 1000)))
+        } else {
+            driftCheckTask?.cancel()
+            try? await musicSource.pause()
+            onSessionUpdate?(.playbackStateChanged(isPlaying: false, positionMs: 0))
         }
 
         currentAnchor = NTPAnchoredPosition(
             trackID: trackID,
-            positionAtAnchor: Double(positionMs) / 1000.0,
-            ntpAnchor: startAtNtp,
-            playbackRate: 1.0
+            positionAtAnchor: snapshot.positionAtAnchor,
+            ntpAnchor: snapshot.ntpAnchor,
+            playbackRate: snapshot.playbackRate
         )
-
-        onSessionUpdate?(.playbackStateChanged(isPlaying: true, positionMs: positionMs))
     }
 
-    private func schedulePlayAt(ntpTime: UInt64) async {
+    // MARK: - Catch-Up Playback
+
+    /// Retries playback from the current anchor after Spotify becomes available.
+    func retryCatchUpPlayback() async {
+        guard let anchor = currentAnchor, anchor.playbackRate > 0 else { return }
         let now = clock.now()
-        let waitMs = Int64(ntpTime) - Int64(now) - Int64(calibratedLatency * 1000)
-
-        if waitMs > 0 {
-            try? await Task.sleep(for: .milliseconds(waitMs))
-        }
-
-        guard let anchor = currentAnchor else { return }
-        let position = Duration.seconds(anchor.positionAt(ntpTime: ntpTime))
-        try? await musicSource.play(trackID: anchor.trackID, at: position)
+        let currentPositionSec = anchor.positionAt(ntpTime: now)
+        try? await musicSource.play(trackID: anchor.trackID, at: .seconds(currentPositionSec))
+        startDriftChecking()
     }
 
     // MARK: - Drift Correction
@@ -341,7 +240,6 @@ actor SyncEngine {
     private func startDriftChecking() {
         driftCheckTask?.cancel()
         driftCheckTask = Task {
-            // Fast checks for the first minute (every 5s), then slow (every 15s)
             var checkInterval: Duration = .seconds(5)
             var checksCount = 0
 
@@ -352,7 +250,7 @@ actor SyncEngine {
                 await checkAndCorrectDrift()
 
                 checksCount += 1
-                if checksCount >= 12 { // After ~60s of fast checks
+                if checksCount >= 12 {
                     checkInterval = .seconds(15)
                 }
             }
@@ -363,8 +261,6 @@ actor SyncEngine {
         guard let anchor = currentAnchor else { return }
 
         let now = clock.now()
-
-        // Cooldown: don't correct within 500ms of the last correction
         guard now - lastCorrectionTime > correctionCooldownMs else { return }
 
         let expectedPositionMs = anchor.positionAt(ntpTime: now) * 1000
@@ -374,77 +270,16 @@ actor SyncEngine {
         let driftMs = abs(expectedPositionMs - actualPositionMs)
 
         if driftMs < 50 {
-            // Tier 1: IGNORE — within acceptable range
             onSessionUpdate?(.syncStatus(.synced))
         } else if driftMs < 500 {
-            // Tier 2: RATE ADJUST — inaudible speed change
-            // If behind, speed up slightly; if ahead, slow down
-            // Note: playback rate adjustment requires SpotifyiOS SDK support.
-            // For now, this is a placeholder — the actual rate adjustment
-            // will be done through the SDK when integrated.
             onSessionUpdate?(.syncStatus(.drifting(ms: Int(driftMs))))
             lastCorrectionTime = now
         } else {
-            // Tier 3: HARD SEEK — audible but necessary
             onSessionUpdate?(.syncStatus(.correcting))
             let targetPosition = Duration.milliseconds(Int(expectedPositionMs))
             try? await musicSource.seek(to: targetPosition)
             lastCorrectionTime = now
         }
-
-        // Report drift to DJ
-        let driftReport = SyncMessage(
-            id: UUID(),
-            type: .driftReport(
-                trackID: anchor.trackID,
-                positionMs: Int(actualPositionMs),
-                ntpTimestamp: now
-            ),
-            sequenceNumber: 0, // drift reports don't need sequencing
-            epoch: currentEpoch,
-            timestamp: now
-        )
-        try? await transport.send(driftReport)
-    }
-
-    // MARK: - Catch-Up Playback
-
-    /// Retries playback from the current anchor after Spotify becomes available.
-    /// Called by SessionStore once AppRemote connects for a crew member joining mid-song.
-    func retryCatchUpPlayback() async {
-        guard let anchor = currentAnchor, anchor.playbackRate > 0 else { return }
-        let now = clock.now()
-        let currentPositionSec = anchor.positionAt(ntpTime: now)
-        try? await musicSource.play(trackID: anchor.trackID, at: .seconds(currentPositionSec))
-        startDriftChecking()
-    }
-
-    // MARK: - State Sync (reconnection / join-mid-song)
-
-    private func handleStateSync(_ snapshot: SessionSnapshot) async {
-        currentEpoch = snapshot.epoch
-        lastProcessedSeq = snapshot.sequenceNumber
-
-        guard let trackID = snapshot.trackID else { return }
-
-        let now = clock.now()
-        let currentPositionSec = snapshot.positionAtAnchor +
-            (Double(now - snapshot.ntpAnchor) / 1000.0) * snapshot.playbackRate
-
-        if snapshot.playbackRate > 0 {
-            try? await musicSource.play(
-                trackID: trackID,
-                at: .seconds(currentPositionSec)
-            )
-            startDriftChecking()
-        }
-
-        currentAnchor = NTPAnchoredPosition(
-            trackID: trackID,
-            positionAtAnchor: snapshot.positionAtAnchor,
-            ntpAnchor: snapshot.ntpAnchor,
-            playbackRate: snapshot.playbackRate
-        )
     }
 
     // MARK: - Connection Monitoring
@@ -457,8 +292,6 @@ actor SyncEngine {
 
                 switch state {
                 case .resyncing:
-                    // After reconnection, the server sends a stateSync message
-                    // which will be processed in processMessage
                     break
                 case .failed:
                     driftCheckTask?.cancel()

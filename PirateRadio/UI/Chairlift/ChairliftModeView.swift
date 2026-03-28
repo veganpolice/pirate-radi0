@@ -56,44 +56,82 @@ struct ChairliftModeView: View {
 
                 Spacer()
 
-                // Simplified controls: just play/pause + skip (large targets)
-                HStack(spacing: 48) {
-                    // Play / Pause
-                    Button {
-                        Task {
-                            if sessionStore.session?.isPlaying == true {
-                                await sessionStore.pause()
-                            } else {
-                                await sessionStore.resume()
-                            }
-                        }
-                    } label: {
-                        Image(systemName: sessionStore.session?.isPlaying == true ? "pause.fill" : "play.fill")
-                            .font(.system(size: 36))
+                // Simplified controls: just skip (large target)
+                Button {
+                    if PirateRadioApp.demoMode {
+                        sessionStore.demoSkipToNext()
+                    } else {
+                        Task { await sessionStore.skipToNext() }
                     }
-                    .frame(width: 80, height: 80)
-                    .buttonStyle(GloveButtonStyle(color: PirateTheme.broadcast))
-
-                    // Skip
-                    Button {
-                        if PirateRadioApp.demoMode {
-                            sessionStore.demoSkipToNext()
-                        } else {
-                            Task { await sessionStore.skipToNext() }
-                        }
-                    } label: {
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 28))
-                    }
-                    .frame(width: 80, height: 80)
-                    .foregroundStyle(PirateTheme.broadcast)
+                } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 28))
                 }
+                .frame(width: 80, height: 80)
+                .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
 
-                // Volume
-                FrequencyDial(value: $volume, color: PirateTheme.signal)
+                // Volume (cosmetic — Spotify SDK doesn't expose volume)
+                VolumeKnob(value: $volume, color: PirateTheme.signal)
                     .frame(width: 100, height: 100)
                     .padding(.bottom, 32)
             }
         }
+    }
+}
+
+// MARK: - Volume Knob (cosmetic rotary dial)
+
+/// A simple rotary knob for volume display in chairlift mode.
+struct VolumeKnob: View {
+    @Binding var value: Double
+    let color: Color
+
+    private let startAngle: Double = -135
+    private let endAngle: Double = 135
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height)
+            let radius = size / 2
+
+            ZStack {
+                Circle()
+                    .strokeBorder(color.opacity(0.3), lineWidth: 2)
+
+                let angle = Angle.degrees(startAngle + value * (endAngle - startAngle))
+
+                Path { path in
+                    let cos = Foundation.cos(angle.radians)
+                    let sin = Foundation.sin(angle.radians)
+                    path.move(to: CGPoint(x: radius + radius * 0.2 * cos, y: radius + radius * 0.2 * sin))
+                    path.addLine(to: CGPoint(x: radius + radius * 0.65 * cos, y: radius + radius * 0.65 * sin))
+                }
+                .stroke(color, lineWidth: 3)
+                .shadow(color: color.opacity(0.8), radius: 4)
+
+                Circle()
+                    .fill(PirateTheme.void)
+                    .frame(width: size * 0.3, height: size * 0.3)
+                    .overlay(Circle().strokeBorder(color.opacity(0.5), lineWidth: 1))
+
+                Text(String(format: "%.0f", value * 100))
+                    .font(PirateTheme.display(size * 0.12))
+                    .foregroundStyle(color)
+            }
+            .frame(width: size, height: size)
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        let center = CGPoint(x: size / 2, y: size / 2)
+                        let angle = atan2(drag.location.y - center.y, drag.location.x - center.x)
+                        let degrees = angle * 180 / .pi
+                        let normalized = (degrees - startAngle) / (endAngle - startAngle)
+                        value = max(0, min(1, normalized))
+                    }
+            )
+            .neonGlow(color, intensity: 0.3)
+        }
+        .aspectRatio(1, contentMode: .fit)
     }
 }
