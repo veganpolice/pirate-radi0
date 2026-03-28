@@ -288,6 +288,14 @@ actor WebSocketTransport: SessionTransport {
                 "nonce": nonce,
             ] as [String: Any]
 
+        case .removeFromQueue(let trackID):
+            result["type"] = "removeFromQueue"
+            result["data"] = ["trackID": trackID] as [String: Any]
+
+        case .reorderQueue(let trackIDs):
+            result["type"] = "reorderQueue"
+            result["data"] = ["trackIDs": trackIDs] as [String: Any]
+
         case .stateSync, .queueUpdate, .memberJoined, .memberLeft:
             result["type"] = "unknown"
             result["data"] = [String: Any]()

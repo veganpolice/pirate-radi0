@@ -22,6 +22,8 @@ struct SyncMessage: Codable, Sendable {
     enum SyncMessageType: Codable, Sendable {
         case skip
         case addToQueue(track: Track, nonce: String)
+        case removeFromQueue(trackID: String)
+        case reorderQueue(trackIDs: [String])
         case stateSync(SessionSnapshot)
         case queueUpdate([Track])
         case memberJoined(userID: UserID, displayName: String)

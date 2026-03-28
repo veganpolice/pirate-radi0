@@ -62,6 +62,15 @@ struct QueueView: View {
                                 ForEach(queue) { track in
                                     trackRow(track, isResult: false)
                                 }
+                                .onMove { source, destination in
+                                    Task { await sessionStore.reorderQueue(from: source, to: destination) }
+                                }
+                                .onDelete { offsets in
+                                    let queue = sessionStore.session?.queue ?? []
+                                    for index in offsets {
+                                        Task { await sessionStore.removeFromQueue(trackID: queue[index].id) }
+                                    }
+                                }
                             } header: {
                                 Text("UP NEXT")
                                     .font(PirateTheme.body(11))
@@ -79,6 +88,10 @@ struct QueueView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                        .foregroundStyle(PirateTheme.signal)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    EditButton()
                         .foregroundStyle(PirateTheme.signal)
                 }
             }

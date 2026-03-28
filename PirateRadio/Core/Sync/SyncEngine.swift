@@ -153,6 +153,28 @@ actor SyncEngine {
         try? await transport.send(msg)
     }
 
+    func sendRemoveFromQueue(trackID: String) async {
+        let msg = SyncMessage(
+            id: UUID(),
+            type: .removeFromQueue(trackID: trackID),
+            sequenceNumber: 0,
+            epoch: currentEpoch,
+            timestamp: clock.now()
+        )
+        try? await transport.send(msg)
+    }
+
+    func sendReorderQueue(trackIDs: [String]) async {
+        let msg = SyncMessage(
+            id: UUID(),
+            type: .reorderQueue(trackIDs: trackIDs),
+            sequenceNumber: 0,
+            epoch: currentEpoch,
+            timestamp: clock.now()
+        )
+        try? await transport.send(msg)
+    }
+
     // MARK: - Message Processing
 
     private func startListening() {
@@ -192,6 +214,14 @@ actor SyncEngine {
             break
 
         case .addToQueue:
+            // Server handles and broadcasts queueUpdate
+            break
+
+        case .removeFromQueue:
+            // Server handles and broadcasts queueUpdate
+            break
+
+        case .reorderQueue:
             // Server handles and broadcasts queueUpdate
             break
 

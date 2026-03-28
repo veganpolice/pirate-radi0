@@ -332,6 +332,20 @@ final class SessionStore {
         await syncEngine?.sendAddToQueue(track: track)
     }
 
+    func removeFromQueue(trackID: String) async {
+        // Optimistic update
+        session?.queue.removeAll { $0.id == trackID }
+        await syncEngine?.sendRemoveFromQueue(trackID: trackID)
+    }
+
+    func reorderQueue(from source: IndexSet, to destination: Int) async {
+        guard var queue = session?.queue else { return }
+        queue.move(fromOffsets: source, toOffset: destination)
+        // Optimistic update
+        session?.queue = queue
+        await syncEngine?.sendReorderQueue(trackIDs: queue.map(\.id))
+    }
+
     func skipToNext() async {
         guard isDJ else { return }
         guard let queue = session?.queue, !queue.isEmpty else { return }
