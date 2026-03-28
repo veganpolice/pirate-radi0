@@ -4,6 +4,7 @@ import SwiftUI
 /// Shows members, chairlift mode toggle, and leave button.
 struct SessionSettingsView: View {
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(SpeedVolumeSettings.self) private var speedVolumeSettings
     @Environment(\.dismiss) private var dismiss
 
     @State private var chairliftMode = false
@@ -17,6 +18,9 @@ struct SessionSettingsView: View {
                 List {
                     // Chairlift mode toggle
                     chairliftSection
+
+                    // Speed-based volume control
+                    speedVolumeSection
 
                     // Members section
                     membersSection
@@ -55,6 +59,49 @@ struct SessionSettingsView: View {
                 }
             }
             .tint(PirateTheme.signal)
+        }
+        .listRowBackground(Color.white.opacity(0.03))
+    }
+
+    private var speedVolumeSection: some View {
+        @Bindable var settings = speedVolumeSettings
+        return Section {
+            Toggle(isOn: $settings.isEnabled) {
+                HStack(spacing: 8) {
+                    Image(systemName: "speedometer")
+                        .foregroundStyle(PirateTheme.signal)
+                    Text("Speed Volume")
+                        .font(PirateTheme.body(14))
+                        .foregroundStyle(.white)
+                }
+            }
+            .tint(PirateTheme.signal)
+
+            if settings.isEnabled {
+                // Quiet volume slider
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Quiet Volume")
+                        .font(PirateTheme.body(12))
+                        .foregroundStyle(.white.opacity(0.6))
+                    Slider(value: $settings.stoppedVolumePercent, in: 0...1)
+                        .tint(PirateTheme.signal)
+                    Text("\(Int(settings.stoppedVolumePercent * 100))%")
+                        .font(PirateTheme.display(12))
+                        .foregroundStyle(PirateTheme.signal)
+                }
+
+                // Chairlift behavior picker
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Chairlift Mode")
+                        .font(PirateTheme.body(12))
+                        .foregroundStyle(.white.opacity(0.6))
+                    Picker("Chairlift", selection: $settings.chairliftBehavior) {
+                        Text("Quiet").tag(SpeedVolumeSettings.ChairliftBehavior.quiet)
+                        Text("Vibing").tag(SpeedVolumeSettings.ChairliftBehavior.vibing)
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
         }
         .listRowBackground(Color.white.opacity(0.03))
     }
