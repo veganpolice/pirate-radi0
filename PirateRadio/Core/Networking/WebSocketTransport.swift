@@ -57,6 +57,9 @@ actor WebSocketTransport: SessionTransport {
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
         stateContinuation.yield(.disconnected)
+        voiceClipContinuation.finish()
+        messageContinuation.finish()
+        stateContinuation.finish()
     }
 
     func send(_ message: SyncMessage) async throws {

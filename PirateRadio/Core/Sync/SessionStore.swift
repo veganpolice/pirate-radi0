@@ -222,7 +222,7 @@ final class SessionStore {
         voiceClipListenTask?.cancel()
         voiceClipListenTask = Task { [weak self] in
             for await clip in transport.incomingVoiceClips {
-                guard !Task.isCancelled else { break }
+                if Task.isCancelled || self == nil { break }
                 await MainActor.run {
                     self?.voiceClipPlayer.playClip(data: clip.audioData, senderName: clip.senderName)
                 }

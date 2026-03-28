@@ -114,6 +114,9 @@ struct FrequencyDial: View {
 
                         checkDetentSnap(clamped)
                     }
+                    .onEnded { _ in
+                        finalizeTune()
+                    }
             )
             .neonGlow(color, intensity: isDragging ? 0.8 : 0.3)
         }
@@ -210,15 +213,14 @@ struct FrequencyDial: View {
             if abs(value - detent) < 0.05 && lastDetent != detent {
                 lastDetent = detent
                 onDetentSnap?(detent)
-
-                // In station mode, also fire onTuneToStation
-                if !stations.isEmpty {
-                    if let station = stations.first(where: { abs(frequencyToDialValue($0.frequency) - detent) < 0.01 }) {
-                        onTuneToStation?(station)
-                    }
-                }
             }
         }
+    }
+
+    /// Fire onTuneToStation for the nearest station when the drag ends.
+    private func finalizeTune() {
+        guard !stations.isEmpty, let station = snappedStation else { return }
+        onTuneToStation?(station)
     }
 
     private func frequencyToDialValue(_ frequency: Double) -> Double {
