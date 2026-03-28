@@ -211,13 +211,8 @@ struct BeatVisualizer: View {
             let artSize = size * 0.28
 
             Group {
-                if let track = store.session?.currentTrack,
-                   let url = track.albumArtURL {
-                    AsyncImage(url: url) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        albumArtPlaceholder
-                    }
+                if let track = store.session?.currentTrack {
+                    CachedAsyncImage(url: track.albumArtURL)
                 } else {
                     albumArtPlaceholder
                 }

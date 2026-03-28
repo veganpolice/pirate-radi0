@@ -28,13 +28,17 @@ struct NowPlayingView: View {
     // Request badge count — derived from queue in real mode, demo uses static count
     @State private var pendingRequestCount = PirateRadioApp.demoMode ? 5 : 0
 
+    private var anySheetPresented: Bool {
+        showQueue || showRequests || showSettings || showMemberProfile != nil
+    }
+
     var body: some View {
         ZStack {
             PirateTheme.void.ignoresSafeArea()
 
-            // Pulsing beat background — behind all UI
+            // Pulsing beat background — paused when sheets are open
             BeatPulseBackground(
-                isPlaying: sessionStore.session?.isPlaying ?? false,
+                isPlaying: !anySheetPresented && (sessionStore.session?.isPlaying ?? false),
                 members: sessionStore.session?.members ?? [],
                 djUserID: sessionStore.session?.djUserID ?? ""
             )

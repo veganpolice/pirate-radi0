@@ -66,16 +66,6 @@ struct BeatPulseBackground: View {
                     index: 1
                 )
 
-                WarpBlob(
-                    color: zoneColor.opacity(0.5),
-                    baseSize: max(geo.size.width, geo.size.height) * 0.8,
-                    anchor: UnitPoint(x: 0.5, y: 0.85),
-                    breathePhase: breathePhase,
-                    driftSpeed: 18,
-                    rotationRange: 60,
-                    index: 2
-                )
-
                 // Layer 2: Spawned rings — each keeps its birth position
                 ForEach(spawnedRings) { ring in
                     SpawnedRingView(ring: ring)

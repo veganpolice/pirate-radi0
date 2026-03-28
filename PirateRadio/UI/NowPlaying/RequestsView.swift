@@ -59,16 +59,9 @@ struct RequestsView: View {
     private func requestRow(_ track: Track) -> some View {
         HStack(spacing: 12) {
             // Album art
-            if let url = track.albumArtURL {
-                AsyncImage(url: url) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(PirateTheme.signal.opacity(0.1))
-                }
+            CachedAsyncImage(url: track.albumArtURL)
                 .frame(width: 44, height: 44)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.name)

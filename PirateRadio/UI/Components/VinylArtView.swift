@@ -10,30 +10,7 @@ struct VinylArtView: View {
     @State private var glowIntensity: CGFloat = 0.3
 
     var body: some View {
-        ZStack {
-            if let url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure:
-                        placeholder
-                    case .empty:
-                        placeholder
-                            .overlay {
-                                ProgressView()
-                                    .tint(PirateTheme.signal)
-                            }
-                    @unknown default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
+        CachedAsyncImage(url: url)
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .scaleEffect(breathScale)
@@ -44,16 +21,6 @@ struct VinylArtView: View {
         .onChange(of: isPlaying) { _, _ in
             startAnimations()
         }
-    }
-
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(PirateTheme.signal.opacity(0.05))
-            .overlay {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: size * 0.24))
-                    .foregroundStyle(PirateTheme.signal.opacity(0.3))
-            }
     }
 
     private func startAnimations() {
