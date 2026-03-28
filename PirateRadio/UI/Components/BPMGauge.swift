@@ -50,15 +50,12 @@ struct BPMGauge: View {
         }
         .frame(width: size, height: size * 0.6)
         .neonGlow(zoneColor, intensity: 0.2)
-        .task {
+        .animation(.easeInOut(duration: 5), value: currentBPM)
+        .task(id: isPlaying) {
+            guard isPlaying else { return }
             while !Task.isCancelled {
-                if isPlaying {
-                    // Oscillate between zones for demo
-                    targetBPM = Double.random(in: 80...165)
-                    withAnimation(.easeInOut(duration: Double.random(in: 3...8))) {
-                        currentBPM = targetBPM
-                    }
-                }
+                targetBPM = Double.random(in: 80...165)
+                currentBPM = targetBPM
                 try? await Task.sleep(for: .seconds(Double.random(in: 3...8)))
             }
         }
