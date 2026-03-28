@@ -106,6 +106,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root redirect to monitor
+app.get("/", (_req, res) => res.redirect("/monitor"));
+
 // Health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", stations: stations.size });
