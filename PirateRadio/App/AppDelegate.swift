@@ -34,5 +34,26 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         } catch {
             print("[PirateRadio] Failed to configure audio session: \(error)")
         }
+
+        // Restart the background keep-alive after interruptions (phone calls, Siri, etc.)
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: session,
+            queue: .main
+        ) { notification in
+            guard let info = notification.userInfo,
+                  let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+
+            if type == .ended {
+                try? AVAudioSession.sharedInstance().setActive(true)
+                Task { @MainActor in
+                    if BackgroundAudioKeepAlive.shared.isRunning {
+                        BackgroundAudioKeepAlive.shared.stop()
+                        BackgroundAudioKeepAlive.shared.start()
+                    }
+                }
+            }
+        }
     }
 }
