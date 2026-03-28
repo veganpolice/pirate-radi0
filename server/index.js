@@ -188,6 +188,8 @@ app.get("/stations", authenticateHTTP, (_req, res) => {
   for (const station of stations.values()) {
     result.push({
       id: station.id,
+      sessionId: station.id,
+      userId: station.members.keys().next().value || "",
       name: station.name,
       frequency: station.frequency,
       currentTrack: station.currentTrack,
