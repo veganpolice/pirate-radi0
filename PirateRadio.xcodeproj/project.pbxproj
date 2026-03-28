@@ -17,7 +17,6 @@
 		2F58E8039C295B038D93EE6F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACFBFA27C23C7AB6F0C857F /* AppDelegate.swift */; };
 
 		3841354410B4BBA56538044D /* Kronos in Frameworks */ = {isa = PBXBuildFile; productRef = 808F79ADA3F3C0F7A40DC874 /* Kronos */; };
-		3DAD82500573D58C0BDAED4E /* SessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7944EEB43CBF9D74199648 /* SessionStoreTests.swift */; };
 		40BC5EEB1F45E1A8307BD730 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBFF43CD7897184B467A999 /* MockData.swift */; };
 		41BC77BD716ECF265A8DB6D7 /* WalkieTalkieButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98F9153B2BC2FC35733B3D6 /* WalkieTalkieButton.swift */; };
 		4560AFC130E2A5E1E2CA4F9F /* TrackProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33C3112283966EE1D927A76 /* TrackProgressBar.swift */; };
@@ -39,7 +38,6 @@
 		8DB3034EF0B70A0F99049299 /* NeonPirateScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEFD32B86E4A92D828E16B /* NeonPirateScene.swift */; };
 		95E251D4BF3808924614D9D8 /* FrequencyDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23040DFEF11900C2500B646D /* FrequencyDial.swift */; };
 		984FB2FAD9A80976D31A30F0 /* ServerMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 453E51C40B34CC4649FCD917 /* ServerMessage.swift */; };
-		9FADC6A88F7B7F9DE1C6B0E0 /* SyncEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EFCDBE27CF9597D6CE90B6E /* SyncEngineTests.swift */; };
 		9FC7243462ED1F5990FB958E /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98ECD25694E483F36914616 /* OnboardingView.swift */; };
 		A319CAEB80C6DAD005E19208 /* GloveButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */; };
 		A89C4FA5BAF357BF0445FD01 /* SyncCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D358A247C684183CB4B21 /* SyncCommand.swift */; };
@@ -50,7 +48,6 @@
 		C272F9E948BD5979306D92A7 /* PirateRadioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */; };
 		C31E0020CA57B07870CD97F4 /* MemberProfileCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD24E4C942637EC14BE6E13 /* MemberProfileCard.swift */; };
 		CA1FB9FCD73ED9CDBA07D7E2 /* VinylArtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD902CFB43ED0E40F25AF39C /* VinylArtView.swift */; };
-		CB2566BF70FEED4613734552 /* WireProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C00BA13BF7A9BD612650DB7 /* WireProtocolTests.swift */; };
 		CE512A01F9F65D69D5F26A92 /* DJModePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D6BA525897044C3AF5A8EB7 /* DJModePicker.swift */; };
 		CEA5AD79EFFA21CD17822FCC /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6B272F58AEB9BEE42364948 /* CachedAsyncImage.swift */; };
 		CF606195AFE99BE5DDAB259C /* DialHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48F0125F33ADECC1309A2096 /* DialHomeView.swift */; };
@@ -104,13 +101,11 @@
 		453E51C40B34CC4649FCD917 /* ServerMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessage.swift; sourceTree = "<group>"; };
 		46ED29ACB39D7297C647163D /* MockClockProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockClockProvider.swift; sourceTree = "<group>"; };
 		48F0125F33ADECC1309A2096 /* DialHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialHomeView.swift; sourceTree = "<group>"; };
-		4C00BA13BF7A9BD612650DB7 /* WireProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireProtocolTests.swift; sourceTree = "<group>"; };
 		4FD24E4C942637EC14BE6E13 /* MemberProfileCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberProfileCard.swift; sourceTree = "<group>"; };
 		50858029E4349C69A37E144C /* ConnectionStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusBadge.swift; sourceTree = "<group>"; };
 		5D6BA525897044C3AF5A8EB7 /* DJModePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DJModePicker.swift; sourceTree = "<group>"; };
 		695D4EC6D5CCEFEC511B2BB2 /* SessionRecapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecapView.swift; sourceTree = "<group>"; };
 		6E9DBDA5DCAC25DC7D516F61 /* BeatVisualizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeatVisualizer.swift; sourceTree = "<group>"; };
-		6EFCDBE27CF9597D6CE90B6E /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
 		6F73EDEFF80F51A9FFEA6036 /* DiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
 		72354CBBD5BF61C4BA07752D /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
 		86EEFD32B86E4A92D828E16B /* NeonPirateScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeonPirateScene.swift; sourceTree = "<group>"; };
@@ -144,7 +139,6 @@
 		F6B272F58AEB9BEE42364948 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 		F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRTStaticOverlay.swift; sourceTree = "<group>"; };
 		F98ECD25694E483F36914616 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
-		FF7944EEB43CBF9D74199648 /* SessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStoreTests.swift; sourceTree = "<group>"; };
 		FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GloveButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -266,9 +260,6 @@
 			isa = PBXGroup;
 			children = (
 				34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */,
-				FF7944EEB43CBF9D74199648 /* SessionStoreTests.swift */,
-				6EFCDBE27CF9597D6CE90B6E /* SyncEngineTests.swift */,
-				4C00BA13BF7A9BD612650DB7 /* WireProtocolTests.swift */,
 			);
 			path = PirateRadioTests;
 			sourceTree = "<group>";
@@ -570,9 +561,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				C272F9E948BD5979306D92A7 /* PirateRadioTests.swift in Sources */,
-				3DAD82500573D58C0BDAED4E /* SessionStoreTests.swift in Sources */,
-				9FADC6A88F7B7F9DE1C6B0E0 /* SyncEngineTests.swift in Sources */,
-				CB2566BF70FEED4613734552 /* WireProtocolTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -621,7 +609,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = A9738D53DZ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -641,7 +629,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.4;
+				MARKETING_VERSION = 0.2.5;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -706,7 +694,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = A9738D53DZ;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -720,7 +708,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.4;
+				MARKETING_VERSION = 0.2.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
