@@ -4,7 +4,6 @@ import SwiftUI
 /// Hides crew strip, enlarges art, simplifies controls.
 struct ChairliftModeView: View {
     @Environment(SessionStore.self) private var sessionStore
-    @Environment(SpeedVolumeSettings.self) private var speedVolumeSettings
 
     @State private var volume: Double = 0.5
 
@@ -71,18 +70,10 @@ struct ChairliftModeView: View {
                 .frame(width: 80, height: 80)
                 .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
 
-                // Volume knob — wired to speed-volume quiet level when enabled
-                VolumeKnob(
-                    value: speedVolumeSettings.isEnabled
-                        ? Binding(
-                            get: { speedVolumeSettings.stoppedVolumePercent },
-                            set: { speedVolumeSettings.stoppedVolumePercent = $0 }
-                          )
-                        : $volume,
-                    color: PirateTheme.signal
-                )
-                .frame(width: 100, height: 100)
-                .padding(.bottom, 32)
+                // Volume (cosmetic — Spotify SDK doesn't expose volume)
+                VolumeKnob(value: $volume, color: PirateTheme.signal)
+                    .frame(width: 100, height: 100)
+                    .padding(.bottom, 32)
             }
         }
     }
