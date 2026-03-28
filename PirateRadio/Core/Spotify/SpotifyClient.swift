@@ -131,6 +131,71 @@ actor SpotifyClient {
         return try JSONDecoder().decode(AudioFeatures.self, from: data)
     }
 
+    // MARK: - Playback Control (Web API)
+    //
+    // These use the Spotify Web API (/v1/me/player/*) instead of SPTAppRemote IPC.
+    // Higher latency (~300-1000ms) but works when the app is backgrounded and
+    // AppRemote is disconnected. The SyncEngine falls back to these automatically.
+
+    /// Start or resume playback of a track via Web API.
+    func play(trackID: String, positionMs: Int = 0) async throws {
+        let token = try await authManager.getAccessToken()
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/play")!)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "uris": ["spotify:track:\(trackID)"],
+            "position_ms": positionMs,
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+    }
+
+    /// Pause playback via Web API.
+    func pause() async throws {
+        let token = try await authManager.getAccessToken()
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/pause")!)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+    }
+
+    /// Seek to a position via Web API.
+    func seek(positionMs: Int) async throws {
+        let token = try await authManager.getAccessToken()
+        var components = URLComponents(string: "https://api.spotify.com/v1/me/player/seek")!
+        components.queryItems = [URLQueryItem(name: "position_ms", value: String(positionMs))]
+
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+    }
+
+    /// Get current player state via Web API. Returns nil if no active device.
+    func getPlayerState() async throws -> WebAPIPlayerState? {
+        let token = try await authManager.getAccessToken()
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { return nil }
+
+        // 204 = no active device
+        if http.statusCode == 204 { return nil }
+        try validateResponse(response)
+
+        return try JSONDecoder().decode(WebAPIPlayerState.self, from: data)
+    }
+
     // MARK: - Helpers
 
     private func validateResponse(_ response: URLResponse) throws {
@@ -187,6 +252,30 @@ private struct SpotifyImage: Codable {
     let url: String
     let width: Int?
     let height: Int?
+}
+
+// MARK: - Web API Player State
+
+struct WebAPIPlayerState: Codable, Sendable {
+    let isPlaying: Bool
+    let progressMs: Int?
+    let item: WebAPITrackItem?
+
+    enum CodingKeys: String, CodingKey {
+        case isPlaying = "is_playing"
+        case progressMs = "progress_ms"
+        case item
+    }
+
+    struct WebAPITrackItem: Codable, Sendable {
+        let id: String
+        let durationMs: Int
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case durationMs = "duration_ms"
+        }
+    }
 }
 
 // MARK: - Audio Features Response

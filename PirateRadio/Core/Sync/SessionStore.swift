@@ -37,6 +37,7 @@ final class SessionStore {
     // MARK: - Dependencies
 
     private var syncEngine: SyncEngine?
+    private var spotifyPlayer: SpotifyPlayer?
     private let authManager: SpotifyAuthManager
     private let baseURL: URL
     var toastManager: ToastManager?
@@ -129,6 +130,7 @@ final class SessionStore {
     func leaveSession() async {
         await syncEngine?.stop()
         syncEngine = nil
+        spotifyPlayer = nil
         session = nil
         isCreator = false
         connectionState = .disconnected
@@ -335,10 +337,19 @@ final class SessionStore {
 
     // MARK: - Private
 
+    /// Toggle background mode on the Spotify player. Call from scene phase changes.
+    func setBackgroundMode(_ enabled: Bool) {
+        Task {
+            await spotifyPlayer?.setBackgroundMode(enabled)
+        }
+    }
+
     private func connectToSession(sessionID: String, token: String) async throws {
         let transport = WebSocketTransport(baseURL: baseURL)
         let clock = KronosClock()
-        let player = SpotifyPlayer(appRemote: authManager.appRemote)
+        let client = SpotifyClient(authManager: authManager)
+        let player = SpotifyPlayer(appRemote: authManager.appRemote, webAPIClient: client)
+        self.spotifyPlayer = player
 
         // Server timer is authoritative for queue advancement — no client-side onTrackEnded.
 

@@ -34,6 +34,12 @@ actor SpotifyPlayer: MusicSource {
     /// but not marked Sendable (Obj-C class).
     nonisolated(unsafe) private let appRemote: SPTAppRemote
 
+    /// Web API client for background playback when AppRemote is disconnected.
+    private let webAPIClient: SpotifyClient?
+
+    /// When true, commands route through Web API instead of AppRemote.
+    private var isInBackground = false
+
     /// Average measured latency from play() call to actual playback start.
     /// Used by the sync engine to calibrate coordinated playback timing.
     var averagePlayLatency: TimeInterval {
@@ -41,19 +47,43 @@ actor SpotifyPlayer: MusicSource {
         return latencyMeasurements.suffix(5).reduce(0, +) / Double(min(latencyMeasurements.count, 5))
     }
 
-    init(appRemote: SPTAppRemote) {
+    init(appRemote: SPTAppRemote, webAPIClient: SpotifyClient? = nil) {
         let (stream, continuation) = AsyncStream.makeStream(of: PlaybackState.self, bufferingPolicy: .bufferingNewest(1))
         self.playbackStateStream = stream
         self.playbackContinuation = continuation
         self.appRemote = appRemote
+        self.webAPIClient = webAPIClient
 
         // Subscribe to player state changes once connected
         Task { await self.subscribeToPlayerState() }
     }
 
+    /// Toggle background mode. When true, all commands use Spotify Web API.
+    func setBackgroundMode(_ enabled: Bool) {
+        isInBackground = enabled
+        if enabled {
+            logger.info("Switched to Web API (background mode)")
+        } else {
+            logger.info("Switched to AppRemote (foreground mode)")
+        }
+    }
+
     // MARK: - MusicSource Protocol
 
     func play(trackID: String, at position: Duration) async throws {
+        if isInBackground, let client = webAPIClient {
+            let positionMs = Int(position.components.seconds * 1000 + position.components.attoseconds / 1_000_000_000_000_000)
+            try await client.play(trackID: trackID, positionMs: positionMs)
+            state = .playing(trackID)
+            playbackContinuation.yield(PlaybackState(
+                trackID: trackID,
+                isPlaying: true,
+                positionSeconds: Double(positionMs) / 1000.0,
+                timestamp: UInt64(Date.now.timeIntervalSince1970 * 1000)
+            ))
+            return
+        }
+
         switch state {
         case .idle, .playing:
             try await beginPlayback(trackID: trackID, position: position)
@@ -64,6 +94,18 @@ actor SpotifyPlayer: MusicSource {
     }
 
     func pause() async throws {
+        if isInBackground, let client = webAPIClient {
+            try await client.pause()
+            state = .idle
+            playbackContinuation.yield(PlaybackState(
+                trackID: currentTrackID,
+                isPlaying: false,
+                positionSeconds: 0,
+                timestamp: UInt64(Date.now.timeIntervalSince1970 * 1000)
+            ))
+            return
+        }
+
         appRemote.playerAPI?.pause { _, error in
             if let error {
                 logger.error("Pause failed: \(error.localizedDescription)")
@@ -80,6 +122,12 @@ actor SpotifyPlayer: MusicSource {
 
     func seek(to position: Duration) async throws {
         let positionMs = Int(position.components.seconds * 1000 + position.components.attoseconds / 1_000_000_000_000_000)
+
+        if isInBackground, let client = webAPIClient {
+            try await client.seek(positionMs: positionMs)
+            return
+        }
+
         appRemote.playerAPI?.seek(toPosition: positionMs) { _, error in
             if let error {
                 logger.error("Seek failed: \(error.localizedDescription)")
@@ -88,7 +136,15 @@ actor SpotifyPlayer: MusicSource {
     }
 
     func currentPosition() async throws -> Duration {
-        try await withCheckedThrowingContinuation { continuation in
+        if isInBackground, let client = webAPIClient {
+            guard let state = try await client.getPlayerState(),
+                  let progressMs = state.progressMs else {
+                return .zero
+            }
+            return .milliseconds(progressMs)
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
             appRemote.playerAPI?.getPlayerState { result, error in
                 if let error {
                     continuation.resume(throwing: error)
