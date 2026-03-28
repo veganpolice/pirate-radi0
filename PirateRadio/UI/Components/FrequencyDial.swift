@@ -110,14 +110,11 @@ struct FrequencyDial: View {
     private func centerLabel(size: CGFloat) -> some View {
         if let station = selectedStation {
             VStack(spacing: 1) {
-                Text(String(format: "%.1f", station.frequency))
+                Text(station.name)
                     .font(PirateTheme.display(size * 0.1))
                     .foregroundStyle(color)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text("PR")
-                    .font(PirateTheme.body(size * 0.06))
-                    .foregroundStyle(color.opacity(0.7))
                 if station.listenerCount > 0 {
                     Text("\(station.listenerCount) listening")
                         .font(PirateTheme.body(size * 0.045))

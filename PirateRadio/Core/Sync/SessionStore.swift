@@ -79,53 +79,9 @@ final class SessionStore {
     }
 
     func joinSession(code: String) async {
-        isLoading = true
-        error = nil
-
-        do {
-            let backendToken = try await getBackendToken()
-            let sessionInfo = try await joinSessionOnBackend(code: code, token: backendToken)
-
-            // Add the DJ and ourselves as members
-            var members: [Session.Member] = []
-
-            // Add the DJ/host (display name will be corrected by stateSync)
-            let djMember = Session.Member(
-                id: sessionInfo.djUserId,
-                displayName: sessionInfo.djDisplayName ?? sessionInfo.djUserId,
-                isConnected: true,
-                avatarColor: .cyan
-            )
-            members.append(djMember)
-
-            // Add ourselves if we're not the DJ
-            if let myID = authManager.userID, myID != sessionInfo.djUserId {
-                let me = Session.Member(
-                    id: myID,
-                    displayName: authManager.displayName ?? myID,
-                    isConnected: true,
-                    avatarColor: AvatarColor.allCases.filter { $0 != .cyan }.randomElement()!
-                )
-                members.append(me)
-            }
-
-            self.session = Session(
-                id: sessionInfo.id,
-                joinCode: sessionInfo.joinCode,
-                creatorID: sessionInfo.djUserId,
-                djUserID: sessionInfo.djUserId,
-                members: members,
-                queue: [],
-                currentTrack: nil,
-                isPlaying: false,
-                epoch: 0,
-                djMode: .solo
-            )
-
-            try await connectToSession(sessionID: sessionInfo.id, token: backendToken)
-        } catch {
-            self.error = .sessionNotFound
-        }
+        // Join by code is not currently supported by the server.
+        // Use tuneToStation / joinSessionById instead.
+        error = .sessionNotFound
 
         isLoading = false
     }
@@ -236,48 +192,50 @@ final class SessionStore {
         }
     }
 
-    /// Join a session by its ID (bypasses code expiry).
+    /// Join a station by its ID. Fetches the station snapshot via GET /stations/:id,
+    /// creates a shell session, then connects via WebSocket (which sends the full stateSync).
     func joinSessionById(_ sessionId: String) async {
         isLoading = true
         error = nil
 
         do {
             let backendToken = try await getBackendToken()
-            let sessionInfo = try await joinSessionByIdOnBackend(sessionId: sessionId, token: backendToken)
+            let snapshot = try await fetchStationSnapshot(stationId: sessionId, token: backendToken)
 
-            var members: [Session.Member] = []
-            let djMember = Session.Member(
-                id: sessionInfo.djUserId,
-                displayName: sessionInfo.djDisplayName ?? sessionInfo.djUserId,
-                isConnected: true,
-                avatarColor: .cyan
-            )
-            members.append(djMember)
+            let djUserId = snapshot.members.first?.userId ?? ""
+            var members: [Session.Member] = snapshot.members.map { m in
+                Session.Member(
+                    id: m.userId,
+                    displayName: m.displayName ?? m.userId,
+                    isConnected: true,
+                    avatarColor: m.userId == djUserId ? .cyan : AvatarColor.allCases.randomElement()!
+                )
+            }
 
-            if let myID = authManager.userID, myID != sessionInfo.djUserId {
-                let me = Session.Member(
+            if let myID = authManager.userID, !members.contains(where: { $0.id == myID }) {
+                let color = AvatarColor.allCases.filter { c in !members.contains { $0.avatarColor == c } }.randomElement() ?? .cyan
+                members.append(Session.Member(
                     id: myID,
                     displayName: authManager.displayName ?? myID,
                     isConnected: true,
-                    avatarColor: AvatarColor.allCases.filter { $0 != .cyan }.randomElement()!
-                )
-                members.append(me)
+                    avatarColor: color
+                ))
             }
 
             self.session = Session(
-                id: sessionInfo.id,
-                joinCode: sessionInfo.joinCode,
-                creatorID: sessionInfo.djUserId,
-                djUserID: sessionInfo.djUserId,
+                id: snapshot.id,
+                joinCode: "",
+                creatorID: djUserId,
+                djUserID: djUserId,
                 members: members,
-                queue: [],
-                currentTrack: nil,
-                isPlaying: false,
-                epoch: 0,
+                queue: snapshot.queue ?? [],
+                currentTrack: snapshot.currentTrack,
+                isPlaying: snapshot.isPlaying,
+                epoch: snapshot.epoch ?? 0,
                 djMode: .solo
             )
 
-            try await connectToSession(sessionID: sessionInfo.id, token: backendToken)
+            try await connectToSession(sessionID: snapshot.id, token: backendToken)
         } catch {
             self.error = .sessionNotFound
         }
@@ -612,39 +570,19 @@ final class SessionStore {
         )
     }
 
-    private func joinSessionByIdOnBackend(sessionId: String, token: String) async throws -> JoinSessionResponse {
-        var request = URLRequest(url: baseURL.appendingPathComponent("sessions/join-by-id"))
-        request.httpMethod = "POST"
+    private func fetchStationSnapshot(stationId: String, token: String) async throws -> StationSnapshotResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("stations/\(stationId)"))
+        request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body = ["sessionId": sessionId]
-        request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw PirateRadioError.sessionNotFound
         }
 
-        return try JSONDecoder().decode(JoinSessionResponse.self, from: data)
+        return try JSONDecoder().decode(StationSnapshotResponse.self, from: data)
     }
 
-    private func joinSessionOnBackend(code: String, token: String) async throws -> JoinSessionResponse {
-        var request = URLRequest(url: baseURL.appendingPathComponent("sessions/join"))
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body = ["code": code]
-        request.httpBody = try JSONEncoder().encode(body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw PirateRadioError.sessionNotFound
-        }
-
-        return try JSONDecoder().decode(JoinSessionResponse.self, from: data)
-    }
 }
 
 // MARK: - Demo Mode
@@ -754,12 +692,20 @@ private struct CreateSessionResponse: Codable {
     let djUserId: String
 }
 
-private struct JoinSessionResponse: Codable {
+private struct StationSnapshotResponse: Codable {
     let id: String
-    let joinCode: String
-    let djUserId: String
-    let djDisplayName: String?
-    let memberCount: Int
+    let name: String
+    let frequency: Double
+    let members: [SnapshotMember]
+    let epoch: UInt64?
+    let currentTrack: Track?
+    let isPlaying: Bool
+    let queue: [Track]?
+
+    struct SnapshotMember: Codable {
+        let userId: String
+        let displayName: String?
+    }
 }
 
 private struct StationsResponse: Codable {
