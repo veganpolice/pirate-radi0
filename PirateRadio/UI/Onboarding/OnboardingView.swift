@@ -53,7 +53,7 @@ struct OnboardingView: View {
                     .clipShape(Circle())
                     .opacity(0.4)
 
-                FrequencyDial(value: $dialValue, color: PirateTheme.signal)
+                VolumeKnob(value: $dialValue, color: PirateTheme.signal)
                     .frame(width: 180, height: 180)
             }
             .onAppear {

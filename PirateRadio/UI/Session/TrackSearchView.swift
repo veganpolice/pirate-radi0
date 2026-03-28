@@ -78,7 +78,7 @@ struct TrackSearchView: View {
                         List(displayTracks) { track in
                             Button {
                                 Task {
-                                    await sessionStore.play(track: track)
+                                    await sessionStore.addToQueue(track: track)
                                     dismiss()
                                 }
                             } label: {

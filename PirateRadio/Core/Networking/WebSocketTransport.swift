@@ -102,7 +102,6 @@ actor WebSocketTransport: SessionTransport {
                     let message = try await task.receive()
                     await self?.handleReceivedMessage(message)
                 } catch {
-                    // Capture close code before the task reference is lost
                     let closeCode = task.closeCode.rawValue
                     await self?.handleDisconnection(error: error, closeCode: Int(closeCode))
                     break
@@ -123,7 +122,6 @@ actor WebSocketTransport: SessionTransport {
             return
         }
 
-        // Guard against oversized messages (DoS protection)
         guard data.count <= 512_000 else {
             print("[WebSocket] Message too large (\(data.count) bytes), dropping")
             return
@@ -135,11 +133,9 @@ actor WebSocketTransport: SessionTransport {
         }
 
         guard let syncMessage = Self.translate(serverMessage, rawData: data) else {
-            print("[WebSocket] Unhandled server message type: \(serverMessage.type)")
             return
         }
 
-        // Track sequence numbers for reconnection
         if syncMessage.sequenceNumber > lastSeenSeq {
             lastSeenSeq = syncMessage.sequenceNumber
         }
@@ -173,42 +169,11 @@ actor WebSocketTransport: SessionTransport {
             let userID = d?["userId"]?.stringValue ?? ""
             type = .memberLeft(userID)
 
-        case "playPrepare":
-            let trackID = d?["trackId"]?.stringValue ?? d?["trackID"]?.stringValue ?? ""
-            let deadline = UInt64(d?["prepareDeadline"]?.doubleValue ?? 0)
-            type = .playPrepare(trackID: trackID, prepareDeadline: deadline)
-
-        case "playCommit":
-            let trackID = d?["trackId"]?.stringValue ?? d?["trackID"]?.stringValue ?? ""
-            let startAt = UInt64(d?["ntpTimestamp"]?.doubleValue ?? d?["startAtNtp"]?.doubleValue ?? 0)
-            let refSeq = UInt64(d?["refSeq"]?.doubleValue ?? 0)
-            type = .playCommit(trackID: trackID, startAtNtp: startAt, refSeq: refSeq)
-
-        case "pause":
-            let atNtp = UInt64(d?["ntpTimestamp"]?.doubleValue ?? Double(ts))
-            type = .pause(atNtp: atNtp)
-
-        case "resume":
-            let atNtp = UInt64(d?["executionTime"]?.doubleValue ?? d?["ntpTimestamp"]?.doubleValue ?? Double(ts))
-            type = .resume(atNtp: atNtp)
-
-        case "seek":
-            let posMs = d?["positionMs"]?.intValue ?? 0
-            let atNtp = UInt64(d?["ntpTimestamp"]?.doubleValue ?? Double(ts))
-            type = .seek(positionMs: posMs, atNtp: atNtp)
-
         case "queueUpdate":
             let tracks = decodeTrackArray(d?["queue"])
             type = .queueUpdate(tracks)
 
-        case "driftReport":
-            let trackID = d?["trackId"]?.stringValue ?? ""
-            let posMs = d?["positionMs"]?.intValue ?? 0
-            let ntpTs = UInt64(d?["ntpTimestamp"]?.doubleValue ?? 0)
-            type = .driftReport(trackID: trackID, positionMs: posMs, ntpTimestamp: ntpTs)
-
         case "pong":
-            // Clock sync response — not a SyncMessage, ignore here
             return nil
 
         default:
@@ -229,19 +194,16 @@ actor WebSocketTransport: SessionTransport {
     static func translateStateSync(_ data: JSONValue?, rawData: Data) -> SyncMessage.SyncMessageType? {
         guard let d = data else { return nil }
 
-        // Parse the stateSync data into a SessionSnapshot
         let trackID = d["currentTrack"]?["id"]?.stringValue
         let positionMs = d["positionMs"]?.doubleValue ?? 0
         let positionTimestamp = UInt64(d["positionTimestamp"]?.doubleValue ?? 0)
         let isPlaying = d["isPlaying"]?.boolValue ?? false
-        let djUserID = d["djUserId"]?.stringValue ?? ""
+        let stationName = d["name"]?.stringValue ?? ""
         let epoch = UInt64(d["epoch"]?.doubleValue ?? 0)
         let sequence = UInt64(d["sequence"]?.doubleValue ?? 0)
 
-        // Parse queue — array of full track objects
         let queue = decodeTrackArray(d["queue"])
 
-        // Parse members
         var members: [SessionSnapshot.SnapshotMember] = []
         if let membersArray = d["members"]?.arrayValue {
             for m in membersArray {
@@ -251,10 +213,8 @@ actor WebSocketTransport: SessionTransport {
             }
         }
 
-        // Try to decode currentTrack as a full Track object
         var currentTrack: Track?
         if let currentTrackValue = d["currentTrack"], currentTrackValue.objectValue?["id"] != nil {
-            // Re-encode just the track portion and try Codable decode
             if let trackData = try? JSONSerialization.data(withJSONObject: jsonValueToAny(currentTrackValue) ?? [:]) {
                 currentTrack = try? JSONDecoder().decode(Track.self, from: trackData)
             }
@@ -266,7 +226,7 @@ actor WebSocketTransport: SessionTransport {
             ntpAnchor: positionTimestamp,
             playbackRate: isPlaying ? 1.0 : 0.0,
             queue: queue,
-            djUserID: djUserID,
+            stationName: stationName,
             epoch: epoch,
             sequenceNumber: sequence,
             members: members,
@@ -276,7 +236,6 @@ actor WebSocketTransport: SessionTransport {
         return .stateSync(snapshot)
     }
 
-    /// Convert JSONValue to Any for JSONSerialization interop.
     private static func jsonValueToAny(_ value: JSONValue) -> Any? {
         switch value {
         case .string(let v): return v
@@ -294,7 +253,6 @@ actor WebSocketTransport: SessionTransport {
         }
     }
 
-    /// Decode an array of Track objects from a JSONValue array.
     private static func decodeTrackArray(_ value: JSONValue?) -> [Track] {
         guard let arr = value?.arrayValue else { return [] }
         return arr.compactMap { item -> Track? in
@@ -314,26 +272,6 @@ actor WebSocketTransport: SessionTransport {
         ]
 
         switch message.type {
-        case .playPrepare(let trackID, let deadline):
-            result["type"] = "playPrepare"
-            result["data"] = ["trackId": trackID, "prepareDeadline": deadline]
-
-        case .playCommit(let trackID, let startAtNtp, let refSeq):
-            result["type"] = "playCommit"
-            result["data"] = ["trackId": trackID, "ntpTimestamp": startAtNtp, "refSeq": refSeq]
-
-        case .pause(let atNtp):
-            result["type"] = "pause"
-            result["data"] = ["ntpTimestamp": atNtp]
-
-        case .resume(let atNtp):
-            result["type"] = "resume"
-            result["data"] = ["executionTime": atNtp, "ntpTimestamp": atNtp]
-
-        case .seek(let positionMs, let atNtp):
-            result["type"] = "seek"
-            result["data"] = ["positionMs": positionMs, "ntpTimestamp": atNtp]
-
         case .skip:
             result["type"] = "skip"
             result["data"] = [String: Any]()
@@ -350,12 +288,7 @@ actor WebSocketTransport: SessionTransport {
                 "nonce": nonce,
             ] as [String: Any]
 
-        case .driftReport(let trackID, let positionMs, let ntpTimestamp):
-            result["type"] = "driftReport"
-            result["data"] = ["trackId": trackID, "positionMs": positionMs, "ntpTimestamp": ntpTimestamp]
-
         case .stateSync, .queueUpdate, .memberJoined, .memberLeft:
-            // These are server-originated; client doesn't send them
             result["type"] = "unknown"
             result["data"] = [String: Any]()
         }
@@ -368,10 +301,8 @@ actor WebSocketTransport: SessionTransport {
     private func handleDisconnection(error: Error, closeCode: Int = 0) {
         guard shouldStayConnected, !isReconnecting else { return }
 
-        // Check for permanent close codes that shouldn't trigger reconnection
-        // 4004 = session not found, 4009 = session full
         if closeCode == 4004 || closeCode == 4009 {
-            let reason = closeCode == 4004 ? "Session no longer exists" : "Session is full"
+            let reason = closeCode == 4004 ? "Station no longer exists" : "Station is full"
             print("[WebSocket] Permanent close code \(closeCode): \(reason)")
             webSocketTask = nil
             shouldStayConnected = false
@@ -387,7 +318,6 @@ actor WebSocketTransport: SessionTransport {
                 reconnectAttempt += 1
                 stateContinuation.yield(.reconnecting(attempt: reconnectAttempt))
 
-                // Exponential backoff: 0.5s, 1s, 2s, 4s, 8s, cap at 15s
                 let delay = min(0.5 * pow(2.0, Double(reconnectAttempt - 1)), 15.0)
                 try? await Task.sleep(for: .seconds(delay))
 

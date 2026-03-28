@@ -52,7 +52,6 @@ struct SessionStoreTests {
             ntpAnchor: 0,
             playbackRate: 0,
             queue: [],
-            djUserID: "new-dj",
             epoch: 1,
             sequenceNumber: 0,
             members: [
@@ -69,31 +68,55 @@ struct SessionStoreTests {
         #expect(store.session?.members.contains { $0.id == "extra-1" } == false)
     }
 
-    // MARK: - DJ Promotion
+    // MARK: - Playback Anchor
 
-    @Test("handleUpdate with stateSync promotes new DJ")
-    func stateSyncPromotesNewDJ() {
+    @Test("stateSync with active track stores playback anchor")
+    func stateSyncStoresPlaybackAnchor() {
         let store = makeStore()
-        let originalDJ = store.session?.djUserID
 
-        // stateSync with a different DJ
+        // Before any stateSync, anchor should be nil
+        #expect(store.playbackAnchor == nil)
+
+        let snapshot = SessionSnapshot(
+            trackID: "track-123",
+            positionAtAnchor: 30.0,
+            ntpAnchor: 1_000_000,
+            playbackRate: 1.0,
+            queue: [],
+            epoch: 1,
+            sequenceNumber: 0,
+            members: [
+                SessionSnapshot.SnapshotMember(userId: "dj-1", displayName: "DJ"),
+            ]
+        )
+        store.handleUpdate(.stateSynced(snapshot))
+
+        #expect(store.playbackAnchor != nil)
+        #expect(store.playbackAnchor?.trackID == "track-123")
+        #expect(store.playbackAnchor?.positionAtAnchor == 30.0)
+        #expect(store.playbackAnchor?.ntpAnchor == 1_000_000)
+        #expect(store.playbackAnchor?.playbackRate == 1.0)
+    }
+
+    @Test("stateSync without track does not set anchor")
+    func stateSyncNoTrackNoAnchor() {
+        let store = makeStore()
+
         let snapshot = SessionSnapshot(
             trackID: nil,
             positionAtAnchor: 0,
             ntpAnchor: 0,
             playbackRate: 0,
             queue: [],
-            djUserID: "promoted-user",
-            epoch: 2,
+            epoch: 1,
             sequenceNumber: 0,
             members: [
-                SessionSnapshot.SnapshotMember(userId: "promoted-user", displayName: "Promoted"),
+                SessionSnapshot.SnapshotMember(userId: "dj-1", displayName: "DJ"),
             ]
         )
         store.handleUpdate(.stateSynced(snapshot))
 
-        #expect(store.session?.djUserID == "promoted-user")
-        #expect(store.session?.djUserID != originalDJ)
-        #expect(store.session?.epoch == 2)
+        #expect(store.playbackAnchor == nil)
     }
+
 }

@@ -44,44 +44,19 @@ final class NowPlayingBridge {
     private func setupRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
 
-        center.playCommand.addTarget { [weak self] _ in
+        // Skip to next — available to everyone
+        center.nextTrackCommand.isEnabled = true
+        center.nextTrackCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            Task { @MainActor in await self.sessionStore.resume() }
+            Task { @MainActor in await self.sessionStore.skipToNext() }
             return .success
         }
 
-        center.pauseCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            Task { @MainActor in await self.sessionStore.pause() }
-            return .success
-        }
-
-        center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            Task { @MainActor in
-                if self.sessionStore.session?.isPlaying == true {
-                    await self.sessionStore.pause()
-                } else {
-                    await self.sessionStore.resume()
-                }
-            }
-            return .success
-        }
-
-        // Only enable DJ-specific commands
-        center.nextTrackCommand.isEnabled = false
+        // No pause/resume/seek — playback is server-driven
+        center.playCommand.isEnabled = false
+        center.pauseCommand.isEnabled = false
+        center.togglePlayPauseCommand.isEnabled = false
         center.previousTrackCommand.isEnabled = false
-
-        // Seeking
-        center.changePlaybackPositionCommand.addTarget { [weak self] event in
-            guard let self,
-                  let event = event as? MPChangePlaybackPositionCommandEvent else {
-                return .commandFailed
-            }
-            Task { @MainActor in
-                await self.sessionStore.seek(to: Int(event.positionTime * 1000))
-            }
-            return .success
-        }
+        center.changePlaybackPositionCommand.isEnabled = false
     }
 }

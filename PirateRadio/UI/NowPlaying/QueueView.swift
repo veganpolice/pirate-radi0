@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Queue management view: search for tracks and add to session queue.
-/// DJ can reorder/remove; listeners can add requests.
-/// In collab mode: vote buttons and auto-sort by vote count.
+/// Queue management view: search for tracks and add to station queue.
+/// Anyone can add songs — no DJ gating.
 struct QueueView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(SpotifyAuthManager.self) private var authManager
@@ -13,29 +12,12 @@ struct QueueView: View {
     @State private var isSearching = false
     @State private var spotifyClient: SpotifyClient?
 
-    private var isCollabMode: Bool {
-        sessionStore.session?.djMode == .collaborative
-    }
-
-    private var sortedQueue: [Track] {
-        guard let queue = sessionStore.session?.queue else { return [] }
-        if isCollabMode {
-            return queue.sorted { $0.votes > $1.votes }
-        }
-        return queue
-    }
-
     var body: some View {
         NavigationStack {
             ZStack {
                 PirateTheme.void.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Mode header for collab/hot-seat
-                    if let mode = sessionStore.session?.djMode, mode != .solo {
-                        modeHeader(mode)
-                    }
-
                     // Search bar
                     HStack(spacing: 12) {
                         Image(systemName: "magnifyingglass")
@@ -75,9 +57,9 @@ struct QueueView: View {
                             }
                         }
 
-                        if !sortedQueue.isEmpty {
+                        if let queue = sessionStore.session?.queue, !queue.isEmpty {
                             Section {
-                                ForEach(sortedQueue) { track in
+                                ForEach(queue) { track in
                                     trackRow(track, isResult: false)
                                 }
                             } header: {
@@ -89,7 +71,7 @@ struct QueueView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
-                    .animation(.spring(duration: 0.4), value: sortedQueue.map(\.id))
+                    .animation(.spring(duration: 0.4), value: sessionStore.session?.queue.map(\.id))
                 }
             }
             .navigationTitle("Queue")
@@ -109,22 +91,6 @@ struct QueueView: View {
                 }
             }
         }
-    }
-
-    private func modeHeader(_ mode: DJMode) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: mode.icon)
-                .font(.system(size: 14))
-            Text(mode.rawValue.uppercased())
-                .font(PirateTheme.display(12))
-
-            if mode == .hotSeat, let dj = sessionStore.session?.members.first(where: { $0.id == sessionStore.session?.djUserID }) {
-                Text("• DJ: \(dj.displayName)")
-                    .font(PirateTheme.body(12))
-            }
-        }
-        .foregroundStyle(PirateTheme.broadcast)
-        .padding(.vertical, 8)
     }
 
     private func trackRow(_ track: Track, isResult: Bool) -> some View {
@@ -151,13 +117,6 @@ struct QueueView: View {
                     .font(PirateTheme.body(12))
                     .foregroundStyle(.white.opacity(0.5))
                     .lineLimit(1)
-
-                // "Added by" label in collab mode
-                if isCollabMode, let requester = track.requestedBy {
-                    Text("Added by \(requester)")
-                        .font(PirateTheme.body(10))
-                        .foregroundStyle(PirateTheme.signal.opacity(0.5))
-                }
             }
 
             Spacer()
@@ -182,9 +141,6 @@ struct QueueView: View {
                         .foregroundStyle(PirateTheme.signal)
                 }
                 .buttonStyle(.plain)
-            } else if isCollabMode {
-                // Vote buttons for collab queue
-                voteControls(track)
             } else {
                 Text(track.durationFormatted)
                     .font(PirateTheme.body(12))
@@ -193,38 +149,6 @@ struct QueueView: View {
         }
         .listRowBackground(Color.clear)
         .listRowSeparatorTint(PirateTheme.snow)
-    }
-
-    private func voteControls(_ track: Track) -> some View {
-        HStack(spacing: 8) {
-            // Vote count badge
-            Text("\(track.votes > 0 ? "+" : "")\(track.votes)")
-                .font(PirateTheme.display(14))
-                .foregroundStyle(track.votes > 0 ? PirateTheme.signal : track.votes < 0 ? PirateTheme.flare : .white.opacity(0.4))
-                .frame(minWidth: 32)
-
-            // Upvote
-            Button {
-                sessionStore.toggleVote(trackID: track.id, isUpvote: true)
-            } label: {
-                Image(systemName: track.isUpvotedByMe ? "hand.thumbsup.fill" : "hand.thumbsup")
-                    .font(.system(size: 16))
-                    .foregroundStyle(track.isUpvotedByMe ? PirateTheme.signal : .white.opacity(0.4))
-            }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.impact(weight: .light), trigger: track.isUpvotedByMe)
-
-            // Downvote
-            Button {
-                sessionStore.toggleVote(trackID: track.id, isUpvote: false)
-            } label: {
-                Image(systemName: track.isDownvotedByMe ? "hand.thumbsdown.fill" : "hand.thumbsdown")
-                    .font(.system(size: 16))
-                    .foregroundStyle(track.isDownvotedByMe ? PirateTheme.flare : .white.opacity(0.4))
-            }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.impact(weight: .light), trigger: track.isDownvotedByMe)
-        }
     }
 
     private func search() async {
