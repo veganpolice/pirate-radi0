@@ -152,11 +152,14 @@ final class SessionStore {
 
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                print("[SessionStore] fetchStations HTTP \(code)")
                 return
             }
 
             let decoded = try JSONDecoder().decode(StationsResponse.self, from: data)
             stations = decoded.stations
+            print("[SessionStore] fetched \(stations.count) stations")
         } catch {
             print("[SessionStore] fetchStations error: \(error)")
         }
