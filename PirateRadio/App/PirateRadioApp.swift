@@ -64,10 +64,12 @@ struct PirateRadioApp: App {
                         if authManager.isAuthenticated && !Self.demoMode {
                             authManager.connectAppRemote()
                         }
+                        sessionStore?.setBackgroundMode(false)
                     case .background:
                         if !Self.demoMode {
                             authManager.disconnectAppRemote()
                         }
+                        sessionStore?.setBackgroundMode(true)
                     default:
                         break
                     }

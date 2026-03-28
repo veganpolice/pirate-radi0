@@ -9,12 +9,12 @@ struct CRTStaticOverlay: View {
     let intensity: Double
 
     /// How many horizontal / vertical cells to divide the canvas into.
-    private let columns = 64
-    private let rows = 96
+    private let columns = 20
+    private let rows = 30
 
     var body: some View {
         if intensity > 0.001 {
-            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
                 Canvas { context, size in
                     let cellW = size.width / CGFloat(columns)
                     let cellH = size.height / CGFloat(rows)

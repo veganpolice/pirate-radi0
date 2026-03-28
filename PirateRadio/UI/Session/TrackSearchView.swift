@@ -122,12 +122,7 @@ struct TrackSearchView: View {
 
     private func trackRow(_ track: Track) -> some View {
         HStack(spacing: 12) {
-            AsyncImage(url: track.albumArtURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.white.opacity(0.1))
-            }
+            CachedAsyncImage(url: track.albumArtURL)
             .frame(width: 48, height: 48)
             .clipShape(RoundedRectangle(cornerRadius: 6))
 

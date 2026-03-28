@@ -2,12 +2,24 @@ import SwiftUI
 
 /// A tiny neon-outlined pirate fleet sailing between mountains.
 /// One ship per crew member, each with a random time offset and slightly different speed.
+/// The DJ's ship is larger — it's the flagship.
 struct NeonPirateScene: View {
     var color: Color = PirateTheme.signal
     var members: [Session.Member] = []
+    var djUserID: UserID = ""
 
     @State private var bobPhase: Bool = false
     @State private var sailPulse: Bool = false
+
+    /// Pre-computed ship layout to avoid O(n²) filtering inside ForEach.
+    private var shipLayout: [(member: Session.Member, isDJ: Bool, nonDJIndex: Int, nonDJCount: Int)] {
+        let nonDJ = members.filter { $0.id != djUserID }
+        return members.map { member in
+            let isDJ = member.id == djUserID
+            let idx = nonDJ.firstIndex(where: { $0.id == member.id }) ?? 0
+            return (member, isDJ, idx, max(nonDJ.count, 1))
+        }
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -18,17 +30,19 @@ struct NeonPirateScene: View {
                 mountains(w: w, h: h)
                 waterLine(w: w, h: h)
 
-                ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
+                ForEach(shipLayout, id: \.member.id) { layout in
                     SailingShip(
-                        color: member.avatarColor.color,
-                        cycleOffset: spacedOffset(index: index, total: members.count, id: member.id),
-                        cycleDuration: stableSpeed(for: member.id),
+                        color: layout.member.avatarColor.color,
+                        cycleOffset: layout.isDJ ? 0 : spacedOffset(index: layout.nonDJIndex, total: layout.nonDJCount, id: layout.member.id),
+                        cycleDuration: stableSpeed(for: layout.member.id),
                         sceneWidth: w,
                         bobPhase: bobPhase,
-                        sailPulse: sailPulse
+                        sailPulse: sailPulse,
+                        immediate: layout.isDJ
                     )
-                    .frame(width: 38, height: 32)
-                    .position(x: w * 0.5, y: h * 0.68)
+                    .frame(width: layout.isDJ ? 52 : 38, height: layout.isDJ ? 44 : 32)
+                    .drawingGroup()
+                    .position(x: w * 0.5, y: h * (layout.isDJ ? 0.64 : 0.68))
                 }
             }
         }

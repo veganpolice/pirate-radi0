@@ -1,13 +1,14 @@
 import Foundation
 
 /// Single source of truth for the current session state.
-/// In the public station model, there is no DJ — anyone can skip or add to queue.
+/// ViewModels project slices of this store; the SyncEngine writes to it.
 @Observable
 @MainActor
 final class SessionStore {
     // MARK: - State
 
     private(set) var session: Session?
+    private(set) var isCreator = false
     private(set) var connectionState: ConnectionState = .disconnected
     private(set) var syncStatus: SyncEngine.SyncStatus = .synced
     private(set) var isLoading = false
@@ -17,15 +18,8 @@ final class SessionStore {
 
     var currentBPM: Double? { nil }
 
-    // Playback anchor from the last stateSync — used to compute current position
-    private(set) var playbackAnchor: NTPAnchoredPosition?
-    private var clock: (any ClockProvider)?
-
-    /// Current playback position in seconds, computed from the NTP-anchored position.
-    var currentPlaybackPosition: Double {
-        guard let anchor = playbackAnchor, let clock else { return 0 }
-        return anchor.positionAt(ntpTime: clock.now())
-    }
+    // TODO: expose anchor from SyncEngine for beat-phase computation
+    var currentPlaybackPosition: Double { 0 }
 
     // MARK: - Voice Clips
 
@@ -40,10 +34,7 @@ final class SessionStore {
 
     private(set) var stations: [Station] = []
     private(set) var isAutoTuning = false
-    /// The station currently being previewed on the dial (audio playing, not yet joined).
-    private(set) var previewingStation: Station?
     private var tuneTask: Task<Void, Never>?
-    private var previewDebounceTask: Task<Void, Never>?
     private var spotifyWakeTask: Task<Void, Never>?
     private var tuneGeneration: UUID = UUID()
 
@@ -56,6 +47,7 @@ final class SessionStore {
 
     private var syncEngine: SyncEngine?
     private var transport: (any SessionTransport)?
+    private var spotifyPlayer: SpotifyPlayer?
     private let authManager: SpotifyAuthManager
     private let baseURL: URL
     var toastManager: ToastManager?
@@ -67,7 +59,83 @@ final class SessionStore {
         self.baseURL = baseURL
     }
 
-    // MARK: - Station Actions
+    // MARK: - Actions
+
+    func createSession() async {
+        guard !isLoading, session == nil else { return } // Prevent double-create
+        isLoading = true
+        error = nil
+
+        do {
+            print("[SessionStore] Creating session... userID=\(authManager.userID ?? "nil")")
+            let backendToken = try await getBackendToken()
+            print("[SessionStore] Got backend token")
+            let session = try await createSessionOnBackend(token: backendToken)
+            print("[SessionStore] Session created: \(session.id), code: \(session.joinCode)")
+            self.session = session
+            self.isCreator = true
+
+            try await connectToSession(sessionID: session.id, token: backendToken)
+            print("[SessionStore] Connected to session")
+        } catch {
+            print("[SessionStore] ERROR: \(error)")
+            self.error = .sessionCreationFailed(underlying: error)
+        }
+
+        isLoading = false
+    }
+
+    func joinSession(code: String) async {
+        isLoading = true
+        error = nil
+
+        do {
+            let backendToken = try await getBackendToken()
+            let sessionInfo = try await joinSessionOnBackend(code: code, token: backendToken)
+
+            // Add the DJ and ourselves as members
+            var members: [Session.Member] = []
+
+            // Add the DJ/host (display name will be corrected by stateSync)
+            let djMember = Session.Member(
+                id: sessionInfo.djUserId,
+                displayName: sessionInfo.djDisplayName ?? sessionInfo.djUserId,
+                isConnected: true,
+                avatarColor: .cyan
+            )
+            members.append(djMember)
+
+            // Add ourselves if we're not the DJ
+            if let myID = authManager.userID, myID != sessionInfo.djUserId {
+                let me = Session.Member(
+                    id: myID,
+                    displayName: authManager.displayName ?? myID,
+                    isConnected: true,
+                    avatarColor: AvatarColor.allCases.filter { $0 != .cyan }.randomElement()!
+                )
+                members.append(me)
+            }
+
+            self.session = Session(
+                id: sessionInfo.id,
+                joinCode: sessionInfo.joinCode,
+                creatorID: sessionInfo.djUserId,
+                djUserID: sessionInfo.djUserId,
+                members: members,
+                queue: [],
+                currentTrack: nil,
+                isPlaying: false,
+                epoch: 0,
+                djMode: .solo
+            )
+
+            try await connectToSession(sessionID: sessionInfo.id, token: backendToken)
+        } catch {
+            self.error = .sessionNotFound
+        }
+
+        isLoading = false
+    }
 
     func leaveSession() async {
         voiceClipListenTask?.cancel()
@@ -83,12 +151,16 @@ final class SessionStore {
         transport = nil
         clock = nil
         playbackAnchor = nil
+        spotifyPlayer = nil
         session = nil
+        isCreator = false
         connectionState = .disconnected
         BackgroundAudioKeepAlive.shared.stop()
     }
 
-    /// Fetch all stations from the server.
+    // MARK: - Dial Home Actions
+
+    /// Fetch live stations from the server.
     func fetchStations() async {
         do {
             let token = try await getBackendToken()
@@ -108,113 +180,197 @@ final class SessionStore {
         }
     }
 
-    /// Auto-tune to the last-listened station (or first station) on app launch.
-    /// Previews audio without joining — the user can scrub the dial and tap Join.
+    /// Auto-tune to the last-listened station (or first live station) on app launch.
     func autoTune() async {
         guard !isAutoTuning, session == nil else { return }
         isAutoTuning = true
         defer { isAutoTuning = false }
 
         await fetchStations()
+
         guard !stations.isEmpty else { return }
 
-        let lastStationId = UserDefaults.standard.string(forKey: "lastTunedStationId")
-        guard let target = stations.first(where: { $0.id == lastStationId }) ?? stations.first else { return }
+        let lastUserId = UserDefaults.standard.string(forKey: "lastTunedUserId")
+        guard let target = stations.first(where: { $0.userId == lastUserId }) ?? stations.first else { return }
 
-        previewStation(target)
-    }
-
-    /// Preview a station's audio on the dial without joining.
-    /// Plays the station's current track directly via Spotify (no SyncEngine).
-    /// Pauses immediately when moving away; debounces play() to avoid rapid-fire IPC during scrubbing.
-    func previewStation(_ station: Station?) {
-        guard station?.id != previewingStation?.id else { return }
-        previewingStation = station
-        previewDebounceTask?.cancel()
-
-        guard let station, let track = station.currentTrack else {
-            // No station or station has no track — pause immediately
-            if authManager.isConnectedToSpotifyApp {
-                authManager.appRemote.playerAPI?.pause(nil)
-            }
-            return
-        }
-
-        // Debounce play() so rapid scrubbing doesn't fire a burst of Spotify IPC calls
-        let uri = "spotify:track:\(track.id)"
-        previewDebounceTask = Task {
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
-            if authManager.isConnectedToSpotifyApp {
-                authManager.appRemote.playerAPI?.play(uri, callback: nil)
-            } else {
-                authManager.wakeSpotifyAndConnect(playURI: uri)
-            }
+        await joinSessionById(target.sessionId)
+        if error == nil {
+            UserDefaults.standard.set(target.userId, forKey: "lastTunedUserId")
         }
     }
 
-    /// Join a station from the dial. Cancel-and-replace for rapid switching.
+    /// Tune to a specific station from the dial. Cancel-and-replace for rapid switching.
+    /// Uses a generation counter so superseded joins clean up after themselves.
     func tuneToStation(_ station: Station) {
-        guard session?.id != station.id else { return }
+        guard session?.id != station.sessionId else { return }
         tuneTask?.cancel()
         let generation = UUID()
         tuneGeneration = generation
-        previewingStation = nil
         tuneTask = Task {
             if session != nil {
                 await leaveSession()
             }
             guard !Task.isCancelled, tuneGeneration == generation else { return }
-            await tuneToStationById(station.id)
+            await joinSessionById(station.sessionId)
             guard tuneGeneration == generation else {
+                // A newer tune request superseded us — leave what we just joined
                 await leaveSession()
                 return
             }
             if error == nil {
-                UserDefaults.standard.set(station.id, forKey: "lastTunedStationId")
+                UserDefaults.standard.set(station.userId, forKey: "lastTunedUserId")
             }
         }
     }
 
-    /// Connect directly to a station by its ID.
-    func tuneToStationById(_ stationId: String) async {
+    /// Join a session by its ID (bypasses code expiry).
+    func joinSessionById(_ sessionId: String) async {
         isLoading = true
         error = nil
 
         do {
             let backendToken = try await getBackendToken()
+            let sessionInfo = try await joinSessionByIdOnBackend(sessionId: sessionId, token: backendToken)
 
-            // Create a minimal session — stateSync will fill in the details
+            var members: [Session.Member] = []
+            let djMember = Session.Member(
+                id: sessionInfo.djUserId,
+                displayName: sessionInfo.djDisplayName ?? sessionInfo.djUserId,
+                isConnected: true,
+                avatarColor: .cyan
+            )
+            members.append(djMember)
+
+            if let myID = authManager.userID, myID != sessionInfo.djUserId {
+                let me = Session.Member(
+                    id: myID,
+                    displayName: authManager.displayName ?? myID,
+                    isConnected: true,
+                    avatarColor: AvatarColor.allCases.filter { $0 != .cyan }.randomElement()!
+                )
+                members.append(me)
+            }
+
             self.session = Session(
-                id: stationId,
-                members: [],
+                id: sessionInfo.id,
+                joinCode: sessionInfo.joinCode,
+                creatorID: sessionInfo.djUserId,
+                djUserID: sessionInfo.djUserId,
+                members: members,
                 queue: [],
                 currentTrack: nil,
                 isPlaying: false,
-                epoch: 0
+                epoch: 0,
+                djMode: .solo
             )
 
-            try await connectToStation(stationID: stationId, token: backendToken)
+            try await connectToSession(sessionID: sessionInfo.id, token: backendToken)
         } catch {
             self.error = .sessionNotFound
-            self.session = nil
         }
 
         isLoading = false
     }
 
-    // MARK: - Playback Actions (available to all)
+    // MARK: - DJ Actions
+
+    var isDJ: Bool {
+        guard let session, let userID = authManager.userID else { return false }
+        return session.djUserID == userID
+    }
+
+    func play(track: Track) async {
+        print("[SessionStore] play() called — isDJ=\(isDJ), appRemoteConnected=\(authManager.isConnectedToSpotifyApp)")
+        // Skip DJ check for solo sessions with no members
+        let canPlay = isDJ || (session?.members.isEmpty == true)
+        guard canPlay else { return }
+
+        // Set currentTrack immediately so UI navigates to the player
+        session?.currentTrack = track
+        session?.isPlaying = true
+
+        // Ensure Spotify app is connected before playing
+        if !authManager.isConnectedToSpotifyApp {
+            print("[SessionStore] AppRemote not connected — waking Spotify app")
+            await ensureSpotifyConnected(trackID: track.id)
+            if !authManager.isConnectedToSpotifyApp {
+                print("[SessionStore] Still not connected after waiting")
+                self.error = .playbackFailed(underlying: NSError(domain: "PirateRadio", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not connect to Spotify app. Make sure Spotify is installed."]))
+                return
+            }
+        }
+
+        // Play through SyncEngine so all listeners get playback commands
+        do {
+            try await syncEngine?.djPlay(track: track)
+            print("[SessionStore] djPlay sent successfully via SyncEngine")
+        } catch {
+            print("[SessionStore] djPlay error: \(error)")
+            self.error = .playbackFailed(underlying: error)
+            session?.isPlaying = false
+            // Surface Spotify Premium / permissions errors as a toast
+            let desc = (error as NSError).localizedDescription.lowercased()
+            if desc.contains("premium") || desc.contains("permission") || desc.contains("restricted") {
+                toastManager?.show(.spotifyError, message: "Spotify Premium required for playback")
+            }
+        }
+    }
+
+    /// Wake Spotify app and wait for AppRemote connection.
+    /// Pass a trackID to start that song immediately instead of resuming Spotify's last song.
+    private func ensureSpotifyConnected(trackID: String? = nil) async {
+        let uri = trackID.map { "spotify:track:\($0)" } ?? ""
+        authManager.wakeSpotifyAndConnect(playURI: uri)
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(500))
+            if authManager.isConnectedToSpotifyApp { break }
+        }
+    }
+
+    func pause() async {
+        guard isDJ else { return }
+        // Optimistic: update UI immediately
+        session?.isPlaying = false
+        do {
+            try await syncEngine?.djPause()
+        } catch {
+            session?.isPlaying = true
+        }
+    }
+
+    func resume() async {
+        guard isDJ else { return }
+        session?.isPlaying = true
+        do {
+            try await syncEngine?.djResume()
+        } catch {
+            session?.isPlaying = false
+        }
+    }
+
+    func seek(to positionMs: Int) async {
+        guard isDJ else { return }
+        try? await syncEngine?.djSeek(to: positionMs)
+    }
 
     func addToQueue(track: Track) async {
+        if session?.currentTrack == nil {
+            await play(track: track)
+            return
+        }
         await syncEngine?.sendAddToQueue(track: track)
     }
 
     func skipToNext() async {
+        guard isDJ else { return }
+        guard let queue = session?.queue, !queue.isEmpty else { return }
+        // Optimistic: advance to next track immediately
+        let previousTrack = session?.currentTrack
+        let previousQueue = session?.queue
+        session?.currentTrack = queue.first
+        session?.queue = Array(queue.dropFirst())
         await syncEngine?.sendSkip()
-    }
-
-    func toggleMute() async {
-        await syncEngine?.toggleLocalMute()
+        // Note: if server rejects, stateSync will correct us
     }
 
     // MARK: - Voice Clip Actions
@@ -275,21 +431,37 @@ final class SessionStore {
 
     // MARK: - Private
 
-    private func connectToStation(stationID: String, token: String) async throws {
+    /// Toggle background mode on the Spotify player. Call from scene phase changes.
+    func setBackgroundMode(_ enabled: Bool) {
+        Task {
+            await spotifyPlayer?.setBackgroundMode(enabled)
+        }
+    }
+
+    private func connectToSession(sessionID: String, token: String) async throws {
         let transport = WebSocketTransport(baseURL: baseURL)
         let clock = KronosClock()
-        self.clock = clock
-        let player = SpotifyPlayer(appRemote: authManager.appRemote)
+        let client = SpotifyClient(authManager: authManager)
+        let player = SpotifyPlayer(appRemote: authManager.appRemote, webAPIClient: client)
+        self.spotifyPlayer = player
+
+        // Server timer is authoritative for queue advancement — no client-side onTrackEnded.
 
         let engine = SyncEngine(musicSource: player, transport: transport, clock: clock)
 
+        // Bridge SyncEngine updates to @Observable state
         await engine.setOnSessionUpdate { [weak self] update in
             Task { @MainActor in
                 self?.handleUpdate(update)
             }
         }
 
-        try await engine.start(sessionID: stationID, token: token)
+        // Pre-warm Spotify connection so first play is instant
+        if !authManager.isConnectedToSpotifyApp {
+            Task { await ensureSpotifyConnected() }
+        }
+
+        try await engine.start(sessionID: sessionID, token: token)
         self.syncEngine = engine
         self.transport = transport
         listenForVoiceClips(transport: transport)
@@ -307,6 +479,7 @@ final class SessionStore {
             connectionState = state
             if case .failed(let reason) = state {
                 print("[SessionStore] Connection failed: \(reason)")
+                // Clear stale session so UI can return to the join/create screen
                 syncEngine = nil
                 session = nil
                 error = .sessionNotFound
@@ -317,6 +490,7 @@ final class SessionStore {
         case .playbackStateChanged(let isPlaying, _):
             session?.isPlaying = isPlaying
         case .memberJoined(let userID, let name):
+            // Deduplicate: update existing member or append new one
             if let idx = session?.members.firstIndex(where: { $0.id == userID }) {
                 if !name.isEmpty {
                     session?.members[idx].displayName = name
@@ -344,14 +518,14 @@ final class SessionStore {
 
     // internal for testability
     func handleStateSync(_ snapshot: SessionSnapshot) {
-        print("[SessionStore] Received stateSync: members=\(snapshot.members.count), track=\(snapshot.trackID ?? "none")")
+        print("[SessionStore] Received stateSync: dj=\(snapshot.djUserID), members=\(snapshot.members.count), track=\(snapshot.trackID ?? "none")")
 
-        // Update station name if provided
-        if !snapshot.stationName.isEmpty {
-            session?.stationName = snapshot.stationName
-        }
+        let previousTrackID = session?.currentTrack?.id
 
-        // Replace member list with server-authoritative data
+        // Update DJ
+        session?.djUserID = snapshot.djUserID
+
+        // Replace member list with server-authoritative data (preserves avatar colors for known members)
         if !snapshot.members.isEmpty {
             var updatedMembers: [Session.Member] = []
             let usedColors = Set(session?.members.map { $0.avatarColor } ?? [])
@@ -359,6 +533,7 @@ final class SessionStore {
 
             for sm in snapshot.members {
                 if let existing = session?.members.first(where: { $0.id == sm.userId }) {
+                    // Keep existing member's avatar color, update display name
                     var member = existing
                     member.displayName = sm.displayName
                     member.isConnected = true
@@ -378,35 +553,27 @@ final class SessionStore {
         session?.isPlaying = snapshot.playbackRate > 0
         session?.epoch = snapshot.epoch
 
-        // Store anchor so UI can compute current playback position
-        if let trackID = snapshot.trackID {
-            playbackAnchor = NTPAnchoredPosition(
-                trackID: trackID,
-                positionAtAnchor: snapshot.positionAtAnchor,
-                ntpAnchor: snapshot.ntpAnchor,
-                playbackRate: snapshot.playbackRate
-            )
-        }
-
-        // Update current track
+        // Update current track from snapshot if available
         if let track = snapshot.currentTrack {
             session?.currentTrack = track
-        } else if snapshot.trackID == nil {
-            session?.currentTrack = nil
         }
 
-        // Update queue
+        // Update queue from snapshot
         session?.queue = snapshot.queue
 
-        // Show toast when station ran out of music
-        if snapshot.playbackRate == 0, snapshot.queue.isEmpty, snapshot.currentTrack == nil {
-            toastManager?.show(.queueEmpty, message: "Station ran out of music — add a song!")
+        // Playback is handled by SyncEngine.handleStateSync() for ALL clients
+        // (plays locally via musicSource.play without sending PREPARE+COMMIT back to server).
+        // No DJ-specific trigger needed here — removes double-play bug when server advances queue.
+
+        // Show toast when station ran out of music (queue empty + stopped playing)
+        if isDJ, snapshot.playbackRate == 0, snapshot.queue.isEmpty, snapshot.currentTrack != nil {
+            toastManager?.show(.queueEmpty, message: "Your station ran out of music")
         }
 
-        // Wake Spotify if music is playing but not connected
+        // If music is playing but Spotify isn't connected, ensure it's ready and retry playback
         if snapshot.playbackRate > 0 && snapshot.trackID != nil {
             if !authManager.isConnectedToSpotifyApp {
-                print("[SessionStore] stateSync shows active playback — waking Spotify")
+                print("[SessionStore] stateSync shows active playback — waking Spotify for listener")
                 spotifyWakeTask?.cancel()
                 spotifyWakeTask = Task {
                     await ensureSpotifyConnected(trackID: snapshot.trackID)
@@ -420,20 +587,13 @@ final class SessionStore {
         }
     }
 
-    private func ensureSpotifyConnected(trackID: String? = nil) async {
-        let uri = trackID.map { "spotify:track:\($0)" } ?? ""
-        authManager.wakeSpotifyAndConnect(playURI: uri)
-        for _ in 0..<20 {
-            try? await Task.sleep(for: .milliseconds(500))
-            if authManager.isConnectedToSpotifyApp { break }
-        }
-    }
-
     private func getBackendToken() async throws -> String {
+        // Return cached token if still valid (refresh 1 hour before expiry)
         if let token = cachedToken, let expiry = tokenExpiry, expiry > Date().addingTimeInterval(3600) {
             return token
         }
 
+        // Profile may still be loading on fresh launch — wait briefly for userID and displayName
         if authManager.userID == nil || authManager.displayName == nil {
             for _ in 0..<10 {
                 try await Task.sleep(for: .milliseconds(300))
@@ -455,19 +615,91 @@ final class SessionStore {
         let response = try JSONDecoder().decode(AuthResponse.self, from: data)
 
         cachedToken = response.token
-        tokenExpiry = Date().addingTimeInterval(24 * 3600)
+        tokenExpiry = Date().addingTimeInterval(24 * 3600) // Server issues 24h tokens
         return response.token
+    }
+
+    private func createSessionOnBackend(token: String) async throws -> Session {
+        var request = URLRequest(url: baseURL.appendingPathComponent("sessions"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, httpResponse) = try await URLSession.shared.data(for: request)
+        if let httpStatus = (httpResponse as? HTTPURLResponse)?.statusCode, httpStatus >= 400 {
+            let body = String(data: data, encoding: .utf8) ?? "unknown"
+            print("[SessionStore] Backend error \(httpStatus): \(body)")
+            throw PirateRadioError.sessionCreationFailed(
+                underlying: NSError(domain: "Backend", code: httpStatus, userInfo: [NSLocalizedDescriptionKey: body])
+            )
+        }
+        let response = try JSONDecoder().decode(CreateSessionResponse.self, from: data)
+
+        // Add the creator as the first member
+        let djMember = Session.Member(
+            id: response.djUserId,
+            displayName: authManager.displayName ?? response.djUserId,
+            isConnected: true,
+            avatarColor: .cyan
+        )
+
+        return Session(
+            id: response.id,
+            joinCode: response.joinCode,
+            creatorID: response.creatorId,
+            djUserID: response.djUserId,
+            members: [djMember],
+            queue: [],
+            currentTrack: nil,
+            isPlaying: false,
+            epoch: 0,
+            djMode: .solo
+        )
+    }
+
+    private func joinSessionByIdOnBackend(sessionId: String, token: String) async throws -> JoinSessionResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("sessions/join-by-id"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = ["sessionId": sessionId]
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw PirateRadioError.sessionNotFound
+        }
+
+        return try JSONDecoder().decode(JoinSessionResponse.self, from: data)
+    }
+
+    private func joinSessionOnBackend(code: String, token: String) async throws -> JoinSessionResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("sessions/join"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = ["code": code]
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw PirateRadioError.sessionNotFound
+        }
+
+        return try JSONDecoder().decode(JoinSessionResponse.self, from: data)
     }
 }
 
 // MARK: - Demo Mode
 
 extension SessionStore {
-    static func demo() -> SessionStore {
+    static func demo(djMode: DJMode = .solo) -> SessionStore {
         let auth = SpotifyAuthManager()
         auth.enableDemoMode()
         let store = SessionStore(authManager: auth)
-        store.session = MockData.demoSession()
+        store.session = MockData.demoSession(djMode: djMode)
         store.connectionState = .connected
         return store
     }
@@ -516,13 +748,21 @@ extension SessionStore {
         session?.queue = Array(queue.dropFirst())
     }
 
-    func addMember(_ member: Session.Member) {
-        guard session?.members.contains(where: { $0.id == member.id }) != true else { return }
-        session?.members.append(member)
+    func changeDJMode(_ mode: DJMode) {
+        session?.djMode = mode
+    }
+
+    func setDJ(_ userID: UserID) {
+        session?.djUserID = userID
     }
 
     func removeMember(_ userID: UserID) {
         session?.members.removeAll { $0.id == userID }
+    }
+
+    func addMember(_ member: Session.Member) {
+        guard session?.members.contains(where: { $0.id == member.id }) != true else { return }
+        session?.members.append(member)
     }
 
     func clearCurrentTrack() {
@@ -531,6 +771,10 @@ extension SessionStore {
 
     func endSession() {
         session = nil
+    }
+
+    func setHotSeatSongsPerDJ(_ count: Int) {
+        session?.hotSeatSongsPerDJ = count
     }
 }
 
@@ -546,6 +790,21 @@ extension SyncEngine {
 
 private struct AuthResponse: Codable {
     let token: String
+}
+
+private struct CreateSessionResponse: Codable {
+    let id: String
+    let joinCode: String
+    let creatorId: String
+    let djUserId: String
+}
+
+private struct JoinSessionResponse: Codable {
+    let id: String
+    let joinCode: String
+    let djUserId: String
+    let djDisplayName: String?
+    let memberCount: Int
 }
 
 private struct StationsResponse: Codable {
