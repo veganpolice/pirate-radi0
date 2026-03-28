@@ -35,7 +35,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             print("[PirateRadio] Failed to configure audio session: \(error)")
         }
 
-        // Restart the background keep-alive after interruptions (phone calls, Siri, etc.)
+        observeInterruptions(session: session)
+        observeRouteChanges(session: session)
+    }
+
+    /// Handle audio interruptions (phone calls, Siri, alarms).
+    /// On interruption end: reactivate the session and restart the keep-alive.
+    private func observeInterruptions(session: AVAudioSession) {
         NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: session,
@@ -45,14 +51,55 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                   let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
 
-            if type == .ended {
+            switch type {
+            case .began:
+                print("[PirateRadio] Audio session interrupted")
+            case .ended:
+                print("[PirateRadio] Audio interruption ended, reactivating session")
                 try? AVAudioSession.sharedInstance().setActive(true)
                 Task { @MainActor in
-                    if BackgroundAudioKeepAlive.shared.isRunning {
-                        BackgroundAudioKeepAlive.shared.stop()
-                        BackgroundAudioKeepAlive.shared.start()
+                    let keepAlive = BackgroundAudioKeepAlive.shared
+                    if keepAlive.isRunning {
+                        keepAlive.stop()
+                        keepAlive.start()
                     }
                 }
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    /// Handle audio route changes (headphones disconnected, Bluetooth lost, etc.).
+    /// When the old route disappears, reactivate the session so the keep-alive
+    /// continues on the new output (typically the built-in speaker).
+    private func observeRouteChanges(session: AVAudioSession) {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: session,
+            queue: .main
+        ) { notification in
+            guard let info = notification.userInfo,
+                  let reasonValue = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
+
+            switch reason {
+            case .oldDeviceUnavailable:
+                // Headphones/Bluetooth disconnected — Spotify pauses automatically.
+                // Reactivate our session so the keep-alive stays running.
+                print("[PirateRadio] Audio route lost (headphones/BT disconnected)")
+                try? AVAudioSession.sharedInstance().setActive(true)
+                Task { @MainActor in
+                    let keepAlive = BackgroundAudioKeepAlive.shared
+                    if keepAlive.isRunning {
+                        keepAlive.stop()
+                        keepAlive.start()
+                    }
+                }
+            case .newDeviceAvailable:
+                print("[PirateRadio] New audio route available")
+            default:
+                break
             }
         }
     }
