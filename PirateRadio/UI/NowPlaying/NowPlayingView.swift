@@ -394,11 +394,11 @@ struct NowPlayingView: View {
     // MARK: - Entrance Animation
 
     private func startEntranceAnimation() {
-        withAnimation(.spring(duration: 0.5)) { showArt = true }
-        withAnimation(.spring(duration: 0.5).delay(0.2)) { showTitle = true }
-        withAnimation(.spring(duration: 0.5).delay(0.4)) { showProgress = true }
-        withAnimation(.spring(duration: 0.5).delay(0.6)) { showControls = true }
-        withAnimation(.spring(duration: 0.5).delay(0.8)) { showCrew = true }
+        withAnimation(.spring(duration: 0.35)) { showArt = true }
+        withAnimation(.spring(duration: 0.35).delay(0.05)) { showTitle = true }
+        withAnimation(.spring(duration: 0.35).delay(0.10)) { showProgress = true }
+        withAnimation(.spring(duration: 0.35).delay(0.15)) { showControls = true }
+        withAnimation(.spring(duration: 0.35).delay(0.20)) { showCrew = true }
     }
 
     // MARK: - Debug Shake
