@@ -8,12 +8,6 @@ struct MemberProfileCard: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            // Drag indicator
-            RoundedRectangle(cornerRadius: 3)
-                .fill(.white.opacity(0.2))
-                .frame(width: 36, height: 5)
-                .padding(.top, 8)
-
             // Avatar
             Circle()
                 .fill(member.avatarColor.color.opacity(0.2))
