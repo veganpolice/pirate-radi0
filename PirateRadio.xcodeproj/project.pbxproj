@@ -49,7 +49,7 @@
 		C272F9E948BD5979306D92A7 /* PirateRadioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */; };
 		C31E0020CA57B07870CD97F4 /* MemberProfileCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD24E4C942637EC14BE6E13 /* MemberProfileCard.swift */; };
 		CA1FB9FCD73ED9CDBA07D7E2 /* VinylArtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD902CFB43ED0E40F25AF39C /* VinylArtView.swift */; };
-		CB2566BF70FEED4613734552 /* WireProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C00BA13BF7A9BD612650DB7 /* WireProtocolTests.swift */; };
+
 		CF606195AFE99BE5DDAB259C /* DialHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48F0125F33ADECC1309A2096 /* DialHomeView.swift */; };
 		D09FC1C53ED5F49E2A39733B /* SignalLostOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE84CFC1C0588A8910FF0E4 /* SignalLostOverlay.swift */; };
 		D15F4F4C128F9A7E9AB670F1 /* SpotifyClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D3F3191E8157F52BCC3CD6 /* SpotifyClient.swift */; };
@@ -108,7 +108,7 @@
 		453E51C40B34CC4649FCD917 /* ServerMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessage.swift; sourceTree = "<group>"; };
 		46ED29ACB39D7297C647163D /* MockClockProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockClockProvider.swift; sourceTree = "<group>"; };
 		48F0125F33ADECC1309A2096 /* DialHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialHomeView.swift; sourceTree = "<group>"; };
-		4C00BA13BF7A9BD612650DB7 /* WireProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireProtocolTests.swift; sourceTree = "<group>"; };
+
 		4FD24E4C942637EC14BE6E13 /* MemberProfileCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberProfileCard.swift; sourceTree = "<group>"; };
 		50858029E4349C69A37E144C /* ConnectionStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusBadge.swift; sourceTree = "<group>"; };
 		695D4EC6D5CCEFEC511B2BB2 /* SessionRecapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecapView.swift; sourceTree = "<group>"; };
@@ -263,7 +263,6 @@
 			children = (
 				34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */,
 				AA2009090909090909090909 /* SpeedVolumeManagerTests.swift */,
-				4C00BA13BF7A9BD612650DB7 /* WireProtocolTests.swift */,
 			);
 			path = PirateRadioTests;
 			sourceTree = "<group>";
@@ -600,7 +599,6 @@
 			files = (
 				C272F9E948BD5979306D92A7 /* PirateRadioTests.swift in Sources */,
 				AA1009090909090909090909 /* SpeedVolumeManagerTests.swift in Sources */,
-				CB2566BF70FEED4613734552 /* WireProtocolTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
