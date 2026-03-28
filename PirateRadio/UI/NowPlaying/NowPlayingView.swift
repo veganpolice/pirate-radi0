@@ -43,13 +43,29 @@ struct NowPlayingView: View {
             // Signal lost overlay
             SignalLostOverlay(isActive: $showSignalLost)
         }
-        .sheet(isPresented: $showQueue) { QueueView() }
-        .sheet(isPresented: $showRequests) { RequestsView() }
-        .sheet(isPresented: $showSettings) { StationSettingsView() }
+        .sheet(isPresented: $showQueue) {
+            QueueView()
+                .presentationBackground(.ultraThinMaterial)
+                .presentationDragIndicator(.visible)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showRequests) {
+            RequestsView()
+                .presentationBackground(.ultraThinMaterial)
+                .presentationDragIndicator(.visible)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showSettings) {
+            StationSettingsView()
+                .presentationBackground(.ultraThinMaterial)
+                .presentationDragIndicator(.visible)
+                .presentationDetents([.medium, .large])
+        }
         .sheet(item: $showMemberProfile) { member in
             MemberProfileCard(member: member)
+                .presentationBackground(.ultraThinMaterial)
                 .presentationDetents([.medium])
-                .presentationDragIndicator(.hidden)
+                .presentationDragIndicator(.visible)
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
