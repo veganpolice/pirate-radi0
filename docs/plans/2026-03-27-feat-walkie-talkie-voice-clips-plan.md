@@ -120,23 +120,23 @@ Voice clips are a **parallel path** — they bypass `SyncMessage`/`SyncEngine` e
 
 **Files:** `server/index.js`
 
-- [ ] Add binary frame detection in `ws.on("message")` — check `Buffer.isBuffer(raw)` **before** `JSON.parse`. Binary frames go to a new `handleVoiceClip()` function; text frames continue to the existing JSON path.
-- [ ] `handleVoiceClip(session, userId, raw)`:
+- [x] Add binary frame detection in `ws.on("message")` — check `Buffer.isBuffer(raw)` **before** `JSON.parse`. Binary frames go to a new `handleVoiceClip()` function; text frames continue to the existing JSON path.
+- [x] `handleVoiceClip(session, userId, raw)`:
   - Read first 4 bytes as uint32 → JSON metadata length
   - Slice and parse JSON metadata portion
   - Validate: `clipId` present, `durationMs` is finite and ≤ 10000, total frame ≤ 60KB
   - Rate limit: track `lastVoiceClipTime` per member, reject if < 15s since last clip. **Set rate limit timestamp on successful relay, not on receipt** — so failed sends don't consume the cooldown.
   - Inject `senderId` and `senderName` from the member registry (server-authoritative, not client-trusted)
   - Repack the frame with injected fields and broadcast
-- [ ] Add `broadcastBinaryToSession(session, buffer, excludeUserId)` helper — sends raw binary Buffer via `ws.send(buffer)` to all members except sender
-- [ ] Cap metadata string fields (`clipId` max 64 chars) to prevent oversized relay
+- [x] Add `broadcastBinaryToSession(session, buffer, excludeUserId)` helper — sends raw binary Buffer via `ws.send(buffer)` to all members except sender
+- [x] Cap metadata string fields (`clipId` max 64 chars) to prevent oversized relay
 
 **Tests:** `server/test.js`
-- [ ] Voice clip binary relay to other members (verify both metadata and audio data arrive correctly)
-- [ ] Sender exclusion (sender doesn't receive own clip)
-- [ ] Rate limiting (second clip within 15s rejected)
-- [ ] Oversized binary rejection (>60KB)
-- [ ] Binary frame without valid header (malformed) → ignored
+- [x] Voice clip binary relay to other members (verify both metadata and audio data arrive correctly)
+- [x] Sender exclusion (sender doesn't receive own clip)
+- [x] Rate limiting (second clip within 15s rejected)
+- [x] Oversized binary rejection (>60KB)
+- [x] Binary frame without valid header (malformed) → ignored
 - [ ] Concurrent clips from different members handled independently
 - [ ] Member disconnect doesn't leave dangling state
 
@@ -144,65 +144,65 @@ Voice clips are a **parallel path** — they bypass `SyncMessage`/`SyncEngine` e
 
 **New file:** `PirateRadio/Core/Audio/VoiceClipRecorder.swift`
 
-- [ ] `actor VoiceClipRecorder` — wraps `AVAudioRecorder`, records AAC/M4A to temp file
-- [ ] `startRecording()` — request mic permission (first time only), switch audio session to `.playAndRecord + .duckOthers + .defaultToSpeaker + .allowBluetoothA2DP`, start recording, enforce 10s max via Task timer
-- [ ] `stopRecording() -> Recording` — stop recorder, read file data, clean up temp file, deactivate session (`setActive(false, .notifyOthersOnDeactivation)`), restore to `.playback + .mixWithOthers`
-- [ ] Handle mic permission denied → throw `RecordingError.microphonePermissionDenied`
-- [ ] `struct Recording { let data: Data; let durationMs: Int }`
+- [x] `actor VoiceClipRecorder` — wraps `AVAudioRecorder`, records AAC/M4A to temp file
+- [x] `startRecording()` — request mic permission (first time only), switch audio session to `.playAndRecord + .duckOthers + .defaultToSpeaker + .allowBluetoothA2DP`, start recording, enforce 10s max via Task timer
+- [x] `stopRecording() -> Recording` — stop recorder, read file data, clean up temp file, deactivate session (`setActive(false, .notifyOthersOnDeactivation)`), restore to `.playback + .mixWithOthers`
+- [x] Handle mic permission denied → throw `RecordingError.microphonePermissionDenied`
+- [x] `struct Recording { let data: Data; let durationMs: Int }`
 
 **Modified file:** `PirateRadio/Core/Networking/WebSocketTransport.swift`
 
-- [ ] Add `sendVoiceClip(metadata: [String: Any], audioData: Data) async throws` — packs 4-byte header + JSON + audio into one binary frame, sends via `URLSessionWebSocketTask.send(.data(packed))`
-- [ ] No changes to `SyncMessage`, `SyncMessageType`, `translate()`, or `encodeForServer()` — voice clips are a parallel path
+- [x] Add `sendVoiceClip(clipId:durationMs:audioData:) async throws` — packs 4-byte header + JSON + audio into one binary frame, sends via `URLSessionWebSocketTask.send(.data(packed))`
+- [x] No changes to `SyncMessage`, `SyncMessageType`, `translate()`, or `encodeForServer()` — voice clips are a parallel path
 
 **Modified file:** `PirateRadio/Core/Protocols/SessionTransport.swift`
 
-- [ ] Add `sendVoiceClip(metadata: [String: Any], audioData: Data) async throws` to `SessionTransport` protocol
-- [ ] Add stub to `MockSessionTransport`
+- [x] Add `sendVoiceClip(clipId:durationMs:audioData:) async throws` to `SessionTransport` protocol
+- [x] Add stub to `MockSessionTransport`
 
 **Modified file:** `PirateRadio/Resources/Info.plist`
 
-- [ ] Add `NSMicrophoneUsageDescription`: "Record voice clips to share with your crew"
+- [x] Add `NSMicrophoneUsageDescription`: "Record voice clips to share with your crew"
 
 ### Phase 3: iOS — Receive + Play
 
 **New file:** `PirateRadio/Core/Audio/VoiceClipPlayer.swift`
 
-- [ ] `@MainActor final class VoiceClipPlayer: NSObject, AVAudioPlayerDelegate`
-- [ ] `playClip(data: Data, senderName: String)` — switch audio session to `.playback + .duckOthers`, play AAC data via `AVAudioPlayer(data:)`, set delegate
-- [ ] `audioPlayerDidFinishPlaying` — deactivate session, restore `.playback + .mixWithOthers`, signal completion
-- [ ] If a clip is already playing when another arrives, drop the incoming one (simple; add queuing later if needed)
-- [ ] Expose `@Observable` state: `currentlyPlayingSender: String?` for the UI bubble
+- [x] `@MainActor @Observable final class VoiceClipPlayer: NSObject, AVAudioPlayerDelegate`
+- [x] `playClip(data: Data, senderName: String)` — switch audio session to `.playback + .duckOthers`, play AAC data via `AVAudioPlayer(data:)`, set delegate
+- [x] `audioPlayerDidFinishPlaying` — deactivate session, restore `.playback + .mixWithOthers`, signal completion
+- [x] If a clip is already playing when another arrives, drop the incoming one (simple; add queuing later if needed)
+- [x] Expose `@Observable` state: `currentlyPlayingSender: String?` for the UI bubble
 
 **Modified file:** `PirateRadio/Core/Networking/WebSocketTransport.swift`
 
-- [ ] In `handleReceivedMessage()`, when a `.data` message arrives that fails JSON decode: try reading as voice clip binary frame (4-byte header + JSON + audio)
-- [ ] Add `incomingVoiceClips: AsyncStream<(senderName: String, audioData: Data)>` — separate stream from `incomingMessages`, keeps SyncEngine untouched
-- [ ] Yield parsed voice clips to this stream
+- [x] In `handleReceivedMessage()`, when a `.data` message arrives that fails JSON decode: try reading as voice clip binary frame (4-byte header + JSON + audio)
+- [x] Add `incomingVoiceClips: AsyncStream<IncomingVoiceClip>` — separate stream from `incomingMessages`, keeps SyncEngine untouched
+- [x] Yield parsed voice clips to this stream
 
 **Modified file:** `PirateRadio/Core/Sync/SessionStore.swift`
 
-- [ ] Add `voiceClipRecorder: VoiceClipRecorder` and `voiceClipPlayer: VoiceClipPlayer` properties
-- [ ] Initialize in `connectToSession()`, subscribe to `transport.incomingVoiceClips` stream
-- [ ] Add `startRecordingVoiceClip()` / `stopRecordingVoiceClip()` — use recorder, pack and send via transport
-- [ ] On incoming clip → forward to `VoiceClipPlayer`
-- [ ] Add `@Observable` state: `isRecordingVoiceClip: Bool`, `voiceClipCooldownActive: Bool`
-- [ ] Client-side 15s cooldown: disable PTT button after sending, show countdown. Server rate limit is the safety net, not the primary mechanism.
+- [x] Add `voiceClipRecorder: VoiceClipRecorder` and `voiceClipPlayer: VoiceClipPlayer` properties
+- [x] Subscribe to `transport.incomingVoiceClips` stream in `connectToStation()`
+- [x] Add `startRecordingVoiceClip()` / `stopRecordingVoiceClip()` — use recorder, pack and send via transport
+- [x] On incoming clip → forward to `VoiceClipPlayer`
+- [x] Add `@Observable` state: `isRecordingVoiceClip: Bool`, `voiceClipCooldownActive: Bool`
+- [x] Client-side 15s cooldown: disable PTT button after sending, show countdown. Server rate limit is the safety net, not the primary mechanism.
 
 ### Phase 4: iOS — Wire Up UI
 
 **Modified file:** `PirateRadio/UI/Components/WalkieTalkieButton.swift`
 
-- [ ] Take `SessionStore` as `@Environment` dependency
-- [ ] Replace fake `startRecording()` with `sessionStore.startRecordingVoiceClip()`
-- [ ] Replace fake `stopRecording()` with `sessionStore.stopRecordingVoiceClip()`
-- [ ] Observe `sessionStore.voiceClipPlayer.currentlyPlayingSender` to show real incoming clip bubble
-- [ ] Observe `sessionStore.voiceClipCooldownActive` to disable PTT during cooldown
-- [ ] Keep existing UI: PTT gesture, waveform animation, progress ring, incoming bubble
+- [x] Take `SessionStore` as `@Environment` dependency (wired up in `MegaphoneButton` instead — already in bottom bar)
+- [x] Replace fake `startRecording()` with `sessionStore.startRecordingVoiceClip()`
+- [x] Replace fake `stopRecording()` with `sessionStore.stopRecordingVoiceClip()`
+- [x] Observe `sessionStore.voiceClipPlayer.currentlyPlayingSender` to show real incoming clip bubble
+- [x] Observe `sessionStore.voiceClipCooldownActive` to disable PTT during cooldown
+- [x] Keep existing UI: PTT gesture, waveform animation, progress ring, incoming bubble
 
 **Modified file:** `PirateRadio/UI/NowPlaying/NowPlayingView.swift`
 
-- [ ] Add `WalkieTalkieButton()` as an overlay (bottom-right corner)
+- [x] `MegaphoneButton` already in bottom bar — wired up with real SessionStore integration (no overlay needed)
 
 ## Acceptance Criteria
 
