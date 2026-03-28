@@ -105,16 +105,9 @@ struct SessionRecapView: View {
 
     private var topTrackCard: some View {
         HStack(spacing: 16) {
-            if let url = stats.topTrack.albumArtURL {
-                AsyncImage(url: url) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(PirateTheme.signal.opacity(0.1))
-                }
+            CachedAsyncImage(url: stats.topTrack.albumArtURL)
                 .frame(width: 64, height: 64)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("TOP TRACK")

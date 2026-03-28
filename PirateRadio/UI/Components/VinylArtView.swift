@@ -10,49 +10,17 @@ struct VinylArtView: View {
     @State private var glowIntensity: CGFloat = 0.3
 
     var body: some View {
-        ZStack {
-            if let url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure:
-                        placeholder
-                    case .empty:
-                        placeholder
-                            .overlay {
-                                ProgressView()
-                                    .tint(PirateTheme.signal)
-                            }
-                    @unknown default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
+        CachedAsyncImage(url: url)
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .scaleEffect(breathScale)
         .neonGlow(PirateTheme.signal, intensity: glowIntensity)
         .shadow(color: PirateTheme.signal.opacity(0.2), radius: 16)
+        .drawingGroup()
         .onAppear { startAnimations() }
         .onChange(of: isPlaying) { _, _ in
             startAnimations()
         }
-    }
-
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(PirateTheme.signal.opacity(0.05))
-            .overlay {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: size * 0.24))
-                    .foregroundStyle(PirateTheme.signal.opacity(0.3))
-            }
     }
 
     private func startAnimations() {
@@ -61,9 +29,9 @@ struct VinylArtView: View {
             withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
                 breathScale = 1.02
             }
-            // Glow oscillation: 0.2 → 0.5 over 0.8s
-            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                glowIntensity = 0.5
+            // Glow oscillation: slow 4s cycle to reduce shadow recalculation
+            withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true)) {
+                glowIntensity = 0.4
             }
         } else {
             withAnimation(.easeOut(duration: 0.3)) {
