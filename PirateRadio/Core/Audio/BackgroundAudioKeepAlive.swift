@@ -15,6 +15,7 @@ final class BackgroundAudioKeepAlive {
 
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
+    private var isAttached = false
 
     private init() {}
 
@@ -24,7 +25,10 @@ final class BackgroundAudioKeepAlive {
 
         let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
 
-        engine.attach(playerNode)
+        if !isAttached {
+            engine.attach(playerNode)
+            isAttached = true
+        }
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
         engine.mainMixerNode.outputVolume = 0.001
 
