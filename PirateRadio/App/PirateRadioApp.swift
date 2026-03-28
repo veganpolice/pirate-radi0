@@ -8,6 +8,8 @@ struct PirateRadioApp: App {
     @State private var sessionStore: SessionStore?
     @State private var toastManager = ToastManager()
     @State private var mockTimerManager = MockTimerManager()
+    @State private var speedVolumeSettings = SpeedVolumeSettings()
+    @State private var speedVolumeManager: SpeedVolumeManager?
 
     /// Set to true to bypass Spotify auth and explore the UI with mock data.
     static let demoMode = false
@@ -54,6 +56,8 @@ struct PirateRadioApp: App {
                 .environment(authManager)
                 .environment(toastManager)
                 .environment(mockTimerManager)
+                .environment(speedVolumeSettings)
+                .optionalEnvironment(speedVolumeManager)
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:
@@ -74,7 +78,39 @@ struct PirateRadioApp: App {
                     // Wire toast manager to session store for queue-empty and error toasts
                     sessionStore?.toastManager = toastManager
                 }
+                .onChange(of: speedVolumeSettings.isEnabled) { _, enabled in
+                    if enabled, sessionStore?.session != nil {
+                        startSpeedVolume()
+                    } else {
+                        speedVolumeManager?.stop()
+                    }
+                }
+                .onChange(of: speedVolumeSettings.stoppedVolumePercent) { _, _ in
+                    speedVolumeManager?.reapplyCurrentZone()
+                }
+                .onChange(of: speedVolumeSettings.chairliftBehavior) { _, _ in
+                    speedVolumeManager?.reapplyCurrentZone()
+                }
+                .onAppear {
+                    // Auto-start if enabled from a previous session
+                    if speedVolumeSettings.isEnabled, sessionStore?.session != nil {
+                        startSpeedVolume()
+                    }
+                }
         }
+    }
+
+    private func startSpeedVolume() {
+        speedVolumeManager?.stop()
+        let provider = GPSSpeedProvider()
+        let volume = SystemVolumeController()
+        let manager = SpeedVolumeManager(
+            speedProvider: provider,
+            volumeController: volume,
+            settings: speedVolumeSettings
+        )
+        speedVolumeManager = manager
+        manager.start()
     }
 
     private func handleMockEvent(_ event: MockTimerManager.MockEvent?) {
