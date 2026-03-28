@@ -88,7 +88,7 @@ struct FrequencyDial: View {
                 // Center knob
                 Circle()
                     .fill(PirateTheme.void)
-                    .frame(width: size * 0.3, height: size * 0.3)
+                    .frame(width: size * 0.4, height: size * 0.4)
                     .overlay(
                         Circle()
                             .strokeBorder(color.opacity(0.5), lineWidth: 1)
@@ -125,16 +125,17 @@ struct FrequencyDial: View {
     @ViewBuilder
     private func centerLabel(size: CGFloat) -> some View {
         if let station = snappedStation {
-            VStack(spacing: 2) {
-                Text(station.displayName)
-                    .font(PirateTheme.display(size * 0.08))
+            VStack(spacing: 1) {
+                Text(String(format: "%.1f", station.frequency))
+                    .font(PirateTheme.display(size * 0.1))
                     .foregroundStyle(color)
                     .lineLimit(1)
-                Text(String(format: "%.1f", station.frequency))
+                    .minimumScaleFactor(0.7)
+                Text("PR")
                     .font(PirateTheme.body(size * 0.06))
                     .foregroundStyle(color.opacity(0.7))
             }
-            .frame(width: size * 0.25)
+            .frame(width: size * 0.35)
         } else if !stations.isEmpty {
             Text("SCAN")
                 .font(PirateTheme.display(size * 0.08))
