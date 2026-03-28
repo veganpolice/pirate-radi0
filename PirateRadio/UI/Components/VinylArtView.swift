@@ -39,6 +39,7 @@ struct VinylArtView: View {
         .scaleEffect(breathScale)
         .neonGlow(PirateTheme.signal, intensity: glowIntensity)
         .shadow(color: PirateTheme.signal.opacity(0.2), radius: 16)
+        .drawingGroup()
         .onAppear { startAnimations() }
         .onChange(of: isPlaying) { _, _ in
             startAnimations()
@@ -61,9 +62,9 @@ struct VinylArtView: View {
             withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
                 breathScale = 1.02
             }
-            // Glow oscillation: 0.2 → 0.5 over 0.8s
-            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                glowIntensity = 0.5
+            // Glow oscillation: slow 4s cycle to reduce shadow recalculation
+            withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true)) {
+                glowIntensity = 0.4
             }
         } else {
             withAnimation(.easeOut(duration: 0.3)) {

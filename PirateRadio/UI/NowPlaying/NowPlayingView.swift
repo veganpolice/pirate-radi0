@@ -237,7 +237,7 @@ struct NowPlayingView: View {
                         Text(track.name)
                             .font(PirateTheme.display(20))
                             .foregroundStyle(PirateTheme.signal)
-                            .neonGlow(PirateTheme.signal, intensity: 0.5)
+                            .neonGlowFull(PirateTheme.signal, intensity: 0.5)
                             .lineLimit(2)
                             .multilineTextAlignment(.trailing)
                             .transition(.move(edge: .trailing).combined(with: .opacity))

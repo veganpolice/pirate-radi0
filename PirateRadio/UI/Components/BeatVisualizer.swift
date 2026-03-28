@@ -12,39 +12,53 @@ struct BeatVisualizer: View {
     /// Number of concentric rings to track (ring pool).
     private let maxRings = 4
 
+    private var isActive: Bool {
+        store.session?.isPlaying == true && store.currentBPM != nil && (store.currentBPM ?? 0) > 0
+    }
+
     var body: some View {
         VStack(spacing: 8) {
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
-                let phase = currentBeatPhase(at: timeline.date)
-                let isPlaying = store.session?.isPlaying == true
-                let hasBPM = store.currentBPM != nil && (store.currentBPM ?? 0) > 0
+            Group {
+                if isActive {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                        let phase = currentBeatPhase(at: timeline.date)
 
-                Canvas { context, size in
-                    let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                    let maxRadius = min(size.width, size.height) / 2
+                        Canvas { context, size in
+                            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                            let maxRadius = min(size.width, size.height) / 2
 
-                    if isPlaying && hasBPM {
-                        drawBeatRings(
-                            context: &context,
-                            center: center,
-                            maxRadius: maxRadius,
-                            phase: phase
-                        )
-                    } else {
-                        // Idle: subtle ambient glow
+                            drawBeatRings(
+                                context: &context,
+                                center: center,
+                                maxRadius: maxRadius,
+                                phase: phase
+                            )
+
+                            drawCenterDisc(
+                                context: &context,
+                                center: center,
+                                radius: maxRadius * 0.3
+                            )
+                        }
+                    }
+                } else {
+                    // Static idle view — no animation loop
+                    Canvas { context, size in
+                        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                        let maxRadius = min(size.width, size.height) / 2
+
                         drawIdleGlow(
                             context: &context,
                             center: center,
                             maxRadius: maxRadius
                         )
-                    }
 
-                    // Album art placeholder circle in center
-                    drawCenterDisc(
-                        context: &context,
-                        center: center,
-                        radius: maxRadius * 0.3
-                    )
+                        drawCenterDisc(
+                            context: &context,
+                            center: center,
+                            radius: maxRadius * 0.3
+                        )
+                    }
                 }
             }
             .frame(maxWidth: .infinity)

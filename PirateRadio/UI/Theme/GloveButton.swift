@@ -27,8 +27,19 @@ struct GloveButtonStyle: ButtonStyle {
     }
 }
 
-/// A neon glow modifier for text and views.
+/// A lightweight single-shadow neon glow — use for most elements.
 struct NeonGlow: ViewModifier {
+    let color: Color
+    let intensity: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .shadow(color: color.opacity(0.5 * intensity), radius: 8 * intensity)
+    }
+}
+
+/// Full 3-layer neon glow — use only on hero elements (e.g. track title).
+struct NeonGlowFull: ViewModifier {
     let color: Color
     let intensity: CGFloat
 
@@ -43,5 +54,8 @@ struct NeonGlow: ViewModifier {
 extension View {
     func neonGlow(_ color: Color, intensity: CGFloat = 1.0) -> some View {
         modifier(NeonGlow(color: color, intensity: intensity))
+    }
+    func neonGlowFull(_ color: Color, intensity: CGFloat = 1.0) -> some View {
+        modifier(NeonGlowFull(color: color, intensity: intensity))
     }
 }
