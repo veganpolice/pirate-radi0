@@ -91,6 +91,10 @@ actor WebSocketTransport: SessionTransport {
         frame.append(jsonData)
         frame.append(audioData)
 
+        guard frame.count <= 60_000 else {
+            throw PirateRadioError.voiceClipTooLarge
+        }
+
         try await task.send(.data(frame))
     }
 
@@ -182,7 +186,7 @@ actor WebSocketTransport: SessionTransport {
 
     /// Parse a single binary frame as a voice clip: 4-byte header + JSON metadata + audio.
     static func parseVoiceClipFrame(_ data: Data) -> IncomingVoiceClip? {
-        guard data.count >= 6 else { return nil }
+        guard data.count >= 6, data.count <= 65_536 else { return nil }
 
         let jsonLen = Int(UInt32(data[0]) << 24 | UInt32(data[1]) << 16 | UInt32(data[2]) << 8 | UInt32(data[3]))
         guard jsonLen > 0, jsonLen <= 1024, 4 + jsonLen < data.count else { return nil }

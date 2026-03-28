@@ -30,6 +30,9 @@ actor VoiceClipRecorder {
     // MARK: - Recording
 
     func startRecording() async throws {
+        // Bail if already recording to avoid orphaning the current recorder
+        if recorder != nil { return }
+
         // Request mic permission on first use
         let granted = await AVAudioSession.sharedInstance().requestRecordPermission()
         guard granted else {

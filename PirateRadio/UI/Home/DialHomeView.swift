@@ -69,7 +69,7 @@ struct DialHomeView: View {
                     .foregroundStyle(PirateTheme.signal)
                     .neonGlow(PirateTheme.signal, intensity: 0.5)
 
-                Text("5 stations on air — pick one")
+                Text("\(sessionStore.stations.count) stations on air — pick one")
                     .font(PirateTheme.body(14))
                     .foregroundStyle(.white.opacity(0.5))
             }

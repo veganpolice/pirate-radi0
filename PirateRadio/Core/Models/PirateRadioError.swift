@@ -22,6 +22,9 @@ enum PirateRadioError: LocalizedError {
     case driftUnrecoverable(offsetMs: Int)
     case transportDisconnected
 
+    // Voice Clips
+    case voiceClipTooLarge
+
     // Playback
     case trackNotAvailable(trackID: String)
     case playbackFailed(underlying: Error)
@@ -63,6 +66,8 @@ enum PirateRadioError: LocalizedError {
             return "Track \(id) is not available in your region."
         case .playbackFailed:
             return "Playback failed. Trying again..."
+        case .voiceClipTooLarge:
+            return "Voice clip is too large to send."
         case .playbackTimeout:
             return "Spotify is taking too long to respond."
         }

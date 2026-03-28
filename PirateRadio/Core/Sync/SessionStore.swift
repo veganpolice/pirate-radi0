@@ -62,6 +62,10 @@ final class SessionStore {
         voiceClipListenTask = nil
         cooldownTask?.cancel()
         voiceClipCooldownActive = false
+        if isRecordingVoiceClip {
+            isRecordingVoiceClip = false
+            await voiceClipRecorder.cancelRecording()
+        }
         await syncEngine?.stop()
         syncEngine = nil
         transport = nil
@@ -166,6 +170,10 @@ final class SessionStore {
         await syncEngine?.sendSkip()
     }
 
+    func toggleMute() async {
+        await syncEngine?.toggleLocalMute()
+    }
+
     // MARK: - Voice Clip Actions
 
     func startRecordingVoiceClip() async throws {
@@ -180,8 +188,12 @@ final class SessionStore {
 
         do {
             let recording = try await voiceClipRecorder.stopRecording()
+            guard let transport else {
+                print("[SessionStore] Voice clip discarded — not connected")
+                return
+            }
             let clipId = UUID().uuidString
-            try await transport?.sendVoiceClip(
+            try await transport.sendVoiceClip(
                 clipId: clipId, durationMs: recording.durationMs, audioData: recording.data
             )
             toastManager?.show(.voiceClip, message: "Voice clip sent to crew!")

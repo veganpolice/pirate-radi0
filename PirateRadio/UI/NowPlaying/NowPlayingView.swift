@@ -313,9 +313,10 @@ struct NowPlayingView: View {
 
             Spacer()
 
-            // Mute / Unmute (visual only — Spotify SDK doesn't expose volume control)
+            // Mute / Unmute (pauses local Spotify playback)
             Button {
                 withAnimation(.spring(duration: 0.2)) { isMuted.toggle() }
+                Task { await sessionStore.toggleMute() }
             } label: {
                 Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.title2)
@@ -486,7 +487,11 @@ struct MegaphoneButton: View {
         recordingProgress = 0
 
         Task {
-            try? await sessionStore.startRecordingVoiceClip()
+            do {
+                try await sessionStore.startRecordingVoiceClip()
+            } catch {
+                sessionStore.toastManager?.show(.spotifyError, message: "Microphone access required")
+            }
         }
 
         // Animate waveform

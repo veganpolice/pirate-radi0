@@ -27,6 +27,9 @@ actor SyncEngine {
     // Current playback anchor
     private var currentAnchor: NTPAnchoredPosition?
 
+    // Local mute — pauses Spotify without affecting the server session
+    private var isLocallyMuted = false
+
     // Session store callback
     var onSessionUpdate: ((SessionUpdate) -> Void)?
 
@@ -78,6 +81,21 @@ actor SyncEngine {
         driftCheckTask = nil
         await transport.disconnect()
         try? await musicSource.pause()
+    }
+
+    // MARK: - Local Mute
+
+    func toggleLocalMute() async {
+        isLocallyMuted.toggle()
+        if isLocallyMuted {
+            driftCheckTask?.cancel()
+            try? await musicSource.pause()
+        } else if let anchor = currentAnchor, anchor.playbackRate > 0 {
+            let now = clock.now()
+            let pos = anchor.positionAt(ntpTime: now)
+            try? await musicSource.play(trackID: anchor.trackID, at: .seconds(pos))
+            startDriftChecking()
+        }
     }
 
     // MARK: - Actions (available to all users)
@@ -167,6 +185,9 @@ actor SyncEngine {
         currentEpoch = snapshot.epoch
         lastProcessedSeq = snapshot.sequenceNumber
 
+        // Transition out of resyncing once we have a fresh stateSync
+        onSessionUpdate?(.connectionStateChanged(.connected))
+
         guard let trackID = snapshot.trackID else {
             // Station is idle — stop playback
             driftCheckTask?.cancel()
@@ -181,11 +202,13 @@ actor SyncEngine {
             (Double(now - snapshot.ntpAnchor) / 1000.0) * snapshot.playbackRate
 
         if snapshot.playbackRate > 0 {
-            try? await musicSource.play(
-                trackID: trackID,
-                at: .seconds(currentPositionSec)
-            )
-            startDriftChecking()
+            if !isLocallyMuted {
+                try? await musicSource.play(
+                    trackID: trackID,
+                    at: .seconds(currentPositionSec)
+                )
+                startDriftChecking()
+            }
             onSessionUpdate?(.playbackStateChanged(isPlaying: true, positionMs: Int(currentPositionSec * 1000)))
         } else {
             driftCheckTask?.cancel()
