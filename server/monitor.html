@@ -499,15 +499,15 @@
         }
 
         // Listener changes
-        const oldMembers = new Set(old.members.map(m => m.userId));
-        const newMembers = new Set(s.members.map(m => m.userId));
-        for (const m of s.members) {
-          if (!oldMembers.has(m.userId)) {
+        const oldListeners = new Set(old.listeners.map(m => m.userId));
+        const newListeners = new Set(s.listeners.map(m => m.userId));
+        for (const m of s.listeners) {
+          if (!oldListeners.has(m.userId)) {
             addLog('listener+', `${s.name}: ${m.displayName} tuned in`);
           }
         }
-        for (const m of old.members) {
-          if (!newMembers.has(m.userId)) {
+        for (const m of old.listeners) {
+          if (!newListeners.has(m.userId)) {
             addLog('listener-', `${s.name}: ${m.displayName} left`);
           }
         }
@@ -534,7 +534,8 @@
     function renderStation(s, serverTime) {
       const posMs = computeCurrentPosition(s, serverTime);
       const durationMs = s.currentTrack?.durationMs || 0;
-      const totalListeners = s.members.reduce((n, m) => n + (m.alive !== false ? 1 : 0), 0);
+      const connectedCount = s.listeners.filter(l => l.connected).length;
+      const totalListeners = s.listeners.length;
 
       return `
         <div class="station-card${s.isPlaying ? ' on-air' : ''}">
@@ -545,7 +546,7 @@
             </div>
             <div class="station-badges">
               <span class="badge ${s.isPlaying ? 'playing' : 'idle'}">${s.isPlaying ? 'ON AIR' : 'IDLE'}</span>
-              <span class="badge listeners">${totalListeners} listener${totalListeners !== 1 ? 's' : ''}</span>
+              <span class="badge listeners">${connectedCount}/${totalListeners} listener${totalListeners !== 1 ? 's' : ''}</span>
               ${s.historyLength > 0 ? `<span class="badge history">${s.historyLength} played</span>` : ''}
               <span class="badge epoch">E${s.epoch}</span>
             </div>
@@ -564,14 +565,14 @@
             </div>
           ` : `<div class="no-track">No track queued</div>`}
 
-          <div class="section-label">Listeners (${s.members.length})</div>
+          <div class="section-label">Listeners (${s.listeners.length})</div>
           <div class="members-list">
-            ${s.members.length === 0 ? '<div style="font-size:12px;color:var(--text2);font-style:italic">No one tuned in</div>' :
-              s.members.map(m => `
+            ${s.listeners.length === 0 ? '<div style="font-size:12px;color:var(--text2);font-style:italic">No one tuned in</div>' :
+              s.listeners.map(m => `
                 <div class="member">
-                  <div class="member-avatar" style="background:${hashColor(m.userId)}">${(m.displayName || m.userId)[0].toUpperCase()}</div>
-                  <span class="member-name">${esc(m.displayName || m.userId)}</span>
-                  <span class="member-time">${timeAgo(m.joinedAt)}</span>
+                  <div class="member-avatar" style="background:${hashColor(m.userId)}${m.connected ? '' : ';opacity:0.4'}">${(m.displayName || m.userId)[0].toUpperCase()}</div>
+                  <span class="member-name" style="${m.connected ? '' : 'opacity:0.5'}">${esc(m.displayName || m.userId)}</span>
+                  <span class="member-time">${m.connected ? 'live' : timeAgo(m.lastSeen)}</span>
                 </div>
               `).join('')}
           </div>
@@ -610,7 +611,7 @@
         const data = await resp.json();
 
         const onAir = data.stations.filter(s => s.isPlaying).length;
-        const totalListeners = data.stations.reduce((n, s) => n + s.members.length, 0);
+        const totalListeners = data.stations.reduce((n, s) => n + s.listeners.length, 0);
 
         document.getElementById('statusDot').className = 'status-dot live';
         document.getElementById('statusText').textContent = 'live';
