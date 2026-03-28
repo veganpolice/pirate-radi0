@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The radio dial home screen. Auto-tunes on appear, shows live stations
-/// as notches on the dial, and offers a "Start Broadcasting" CTA.
+/// The radio dial home screen. Previews station audio as you scrub the dial,
+/// shows a Join button when snapped to a station, and offers "Start Broadcasting".
 struct DialHomeView: View {
     @Environment(SessionStore.self) private var sessionStore
 
@@ -22,11 +22,27 @@ struct DialHomeView: View {
                     value: $dialValue,
                     color: PirateTheme.signal,
                     stations: sessionStore.stations,
-                    onTuneToStation: { station in
-                        sessionStore.tuneToStation(station)
+                    onSnappedStationChanged: { station in
+                        sessionStore.previewStation(station)
                     }
                 )
                 .padding(.horizontal, 24)
+
+                // Join button — visible when previewing a station
+                if let station = sessionStore.previewingStation {
+                    Button {
+                        sessionStore.tuneToStation(station)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "headphones")
+                            Text("Join \(station.displayName)")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
+                    .padding(.horizontal, 24)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
 
                 // "My Broadcast" button
                 Button {
@@ -51,14 +67,25 @@ struct DialHomeView: View {
 
                 Spacer()
             }
+            .animation(.easeOut(duration: 0.2), value: sessionStore.previewingStation?.id)
         }
         .task {
             await sessionStore.autoTune()
+            // Position dial at the auto-tuned station
+            if let station = sessionStore.previewingStation {
+                dialValue = dialPosition(for: station.frequency)
+            }
         }
         .onChange(of: sessionStore.session) { oldValue, newValue in
-            // Re-fetch stations when returning from a session (e.g. leaving NowPlayingView)
+            // Re-fetch stations and resume preview when returning from a session
             if oldValue != nil && newValue == nil {
-                Task { await sessionStore.fetchStations() }
+                Task {
+                    await sessionStore.fetchStations()
+                    if let target = lastTunedStation() {
+                        dialValue = dialPosition(for: target.frequency)
+                        sessionStore.previewStation(target)
+                    }
+                }
             }
         }
     }
@@ -100,9 +127,24 @@ struct DialHomeView: View {
         }
     }
 
+    // MARK: - Helpers
+
+    /// Map FM frequency to 0–1 dial position.
+    private func dialPosition(for frequency: Double) -> Double {
+        (frequency - FrequencyDial.fmMin) / (FrequencyDial.fmMax - FrequencyDial.fmMin)
+    }
+
+    /// Find the last-tuned station from the current station list.
+    private func lastTunedStation() -> Station? {
+        let lastUserId = UserDefaults.standard.string(forKey: "lastTunedUserId")
+        return sessionStore.stations.first(where: { $0.userId == lastUserId })
+            ?? sessionStore.stations.first
+    }
+
     // MARK: - Actions
 
     private func startBroadcasting() async {
+        sessionStore.previewStation(nil)
         if sessionStore.session != nil {
             await sessionStore.leaveSession()
         }

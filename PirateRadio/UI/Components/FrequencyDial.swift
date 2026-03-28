@@ -14,10 +14,12 @@ struct FrequencyDial: View {
 
     // Station mode — when non-empty, dial derives detents from station frequencies
     var stations: [Station] = []
-    var onTuneToStation: ((Station) -> Void)?
+    /// Fires when the snapped station changes (including to nil when moving away).
+    var onSnappedStationChanged: ((Station?) -> Void)?
 
     @State private var dragAngle: Angle = .zero
     @State private var lastDetent: Double = -1
+    @State private var lastReportedStationId: String?
     @GestureState private var isDragging = false
 
     // Dial geometry
@@ -26,8 +28,8 @@ struct FrequencyDial: View {
     private let tickCount = 20
 
     // FM band range for frequency-to-dial mapping
-    private let fmMin: Double = 88.0
-    private let fmMax: Double = 108.0
+    static let fmMin: Double = 88.0
+    static let fmMax: Double = 108.0
 
     /// Detents used for rendering — derived from stations when in station mode.
     private var effectiveDetents: [Double] {
@@ -37,19 +39,7 @@ struct FrequencyDial: View {
 
     /// The station closest to the current dial position (if in station mode).
     private var snappedStation: Station? {
-        guard !stations.isEmpty else { return nil }
-        let dialValue = value
-        var closest: Station?
-        var closestDist = Double.infinity
-        for station in stations {
-            let stationValue = frequencyToDialValue(station.frequency)
-            let dist = abs(dialValue - stationValue)
-            if dist < closestDist && dist < 0.08 {
-                closestDist = dist
-                closest = station
-            }
-        }
-        return closest
+        stationForDialValue(value)
     }
 
     var body: some View {
@@ -111,6 +101,13 @@ struct FrequencyDial: View {
                         let normalized = (degrees - startAngle) / (endAngle - startAngle)
                         let clamped = max(0, min(1, normalized))
                         value = clamped
+
+                        // Report snapped station changes (including nil when moving away)
+                        let nowSnapped = stationForDialValue(clamped)
+                        if nowSnapped?.id != lastReportedStationId {
+                            lastReportedStationId = nowSnapped?.id
+                            onSnappedStationChanged?(nowSnapped)
+                        }
 
                         checkDetentSnap(clamped)
                     }
@@ -210,18 +207,27 @@ struct FrequencyDial: View {
             if abs(value - detent) < 0.05 && lastDetent != detent {
                 lastDetent = detent
                 onDetentSnap?(detent)
-
-                // In station mode, also fire onTuneToStation
-                if !stations.isEmpty {
-                    if let station = stations.first(where: { abs(frequencyToDialValue($0.frequency) - detent) < 0.01 }) {
-                        onTuneToStation?(station)
-                    }
-                }
             }
         }
     }
 
+    /// Find the station closest to a dial value (within snap threshold).
+    private func stationForDialValue(_ dialValue: Double) -> Station? {
+        guard !stations.isEmpty else { return nil }
+        var closest: Station?
+        var closestDist = Double.infinity
+        for station in stations {
+            let stationValue = frequencyToDialValue(station.frequency)
+            let dist = abs(dialValue - stationValue)
+            if dist < closestDist && dist < 0.08 {
+                closestDist = dist
+                closest = station
+            }
+        }
+        return closest
+    }
+
     private func frequencyToDialValue(_ frequency: Double) -> Double {
-        (frequency - fmMin) / (fmMax - fmMin)
+        (frequency - Self.fmMin) / (Self.fmMax - Self.fmMin)
     }
 }
