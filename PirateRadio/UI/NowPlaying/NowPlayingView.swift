@@ -258,8 +258,9 @@ struct NowPlayingView: View {
         // Only reset origin when track actually changes
         if newTrackID != trackedTrackID {
             trackedTrackID = newTrackID
-            // Use server position if available via SyncEngine's last stateSync
-            positionOrigin = .now
+            // Backdate origin by the server's current playback position
+            let currentPositionSec = sessionStore.currentPlaybackPosition
+            positionOrigin = Date.now.addingTimeInterval(-currentPositionSec)
         }
     }
 

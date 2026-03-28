@@ -16,7 +16,16 @@ final class SessionStore {
     // MARK: - BPM (stub — not yet wired to Spotify audio analysis)
 
     var currentBPM: Double? { nil }
-    var currentPlaybackPosition: Double { 0 }
+
+    // Playback anchor from the last stateSync — used to compute current position
+    private(set) var playbackAnchor: NTPAnchoredPosition?
+    private var clock: (any ClockProvider)?
+
+    /// Current playback position in seconds, computed from the NTP-anchored position.
+    var currentPlaybackPosition: Double {
+        guard let anchor = playbackAnchor, let clock else { return 0 }
+        return anchor.positionAt(ntpTime: clock.now())
+    }
 
     // MARK: - Voice Clips
 
@@ -69,8 +78,11 @@ final class SessionStore {
         await syncEngine?.stop()
         syncEngine = nil
         transport = nil
+        clock = nil
+        playbackAnchor = nil
         session = nil
         connectionState = .disconnected
+        BackgroundAudioKeepAlive.shared.stop()
     }
 
     /// Fetch all stations from the server.
@@ -235,6 +247,7 @@ final class SessionStore {
     private func connectToStation(stationID: String, token: String) async throws {
         let transport = WebSocketTransport(baseURL: baseURL)
         let clock = KronosClock()
+        self.clock = clock
         let player = SpotifyPlayer(appRemote: authManager.appRemote)
 
         let engine = SyncEngine(musicSource: player, transport: transport, clock: clock)
@@ -249,6 +262,11 @@ final class SessionStore {
         self.syncEngine = engine
         self.transport = transport
         listenForVoiceClips(transport: transport)
+
+        // Start background audio keep-alive so iOS doesn't suspend the app
+        // when the screen is off. Spotify plays audio in its own process,
+        // so without this our sync engine would be killed.
+        BackgroundAudioKeepAlive.shared.start()
     }
 
     // internal for testability
@@ -261,6 +279,7 @@ final class SessionStore {
                 syncEngine = nil
                 session = nil
                 error = .sessionNotFound
+                BackgroundAudioKeepAlive.shared.stop()
             }
         case .syncStatus(let status):
             syncStatus = status
@@ -327,6 +346,16 @@ final class SessionStore {
         // Update playback state
         session?.isPlaying = snapshot.playbackRate > 0
         session?.epoch = snapshot.epoch
+
+        // Store anchor so UI can compute current playback position
+        if let trackID = snapshot.trackID {
+            playbackAnchor = NTPAnchoredPosition(
+                trackID: trackID,
+                positionAtAnchor: snapshot.positionAtAnchor,
+                ntpAnchor: snapshot.ntpAnchor,
+                playbackRate: snapshot.playbackRate
+            )
+        }
 
         // Update current track
         if let track = snapshot.currentTrack {
