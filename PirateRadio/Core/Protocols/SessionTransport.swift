@@ -67,11 +67,21 @@ struct SessionSnapshot: Codable, Sendable {
 typealias UserID = String
 typealias SessionID = String
 
+/// A received voice clip from another station member.
+struct IncomingVoiceClip: Sendable {
+    let clipId: String
+    let senderName: String
+    let durationMs: Int
+    let audioData: Data
+}
+
 /// Abstracts the real-time transport layer for testability and future P2P support.
 protocol SessionTransport: Sendable {
     func connect(to session: SessionID, token: String) async throws
     func disconnect() async
     func send(_ message: SyncMessage) async throws
+    func sendVoiceClip(clipId: String, durationMs: Int, audioData: Data) async throws
     var incomingMessages: AsyncStream<SyncMessage> { get }
+    var incomingVoiceClips: AsyncStream<IncomingVoiceClip> { get }
     var connectionState: AsyncStream<ConnectionState> { get }
 }

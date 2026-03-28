@@ -18,6 +18,15 @@ final class SessionStore {
     var currentBPM: Double? { nil }
     var currentPlaybackPosition: Double { 0 }
 
+    // MARK: - Voice Clips
+
+    let voiceClipPlayer = VoiceClipPlayer()
+    private(set) var isRecordingVoiceClip = false
+    private(set) var voiceClipCooldownActive = false
+    private var voiceClipRecorder = VoiceClipRecorder()
+    private var voiceClipListenTask: Task<Void, Never>?
+    private var cooldownTask: Task<Void, Never>?
+
     // MARK: - Dial Home State
 
     private(set) var stations: [Station] = []
@@ -34,6 +43,7 @@ final class SessionStore {
     // MARK: - Dependencies
 
     private var syncEngine: SyncEngine?
+    private var transport: (any SessionTransport)?
     private let authManager: SpotifyAuthManager
     private let baseURL: URL
     var toastManager: ToastManager?
@@ -48,8 +58,13 @@ final class SessionStore {
     // MARK: - Station Actions
 
     func leaveSession() async {
+        voiceClipListenTask?.cancel()
+        voiceClipListenTask = nil
+        cooldownTask?.cancel()
+        voiceClipCooldownActive = false
         await syncEngine?.stop()
         syncEngine = nil
+        transport = nil
         session = nil
         connectionState = .disconnected
     }
@@ -151,6 +166,58 @@ final class SessionStore {
         await syncEngine?.sendSkip()
     }
 
+    // MARK: - Voice Clip Actions
+
+    func startRecordingVoiceClip() async throws {
+        guard !voiceClipCooldownActive else { return }
+        try await voiceClipRecorder.startRecording()
+        isRecordingVoiceClip = true
+    }
+
+    func stopRecordingVoiceClip() async {
+        guard isRecordingVoiceClip else { return }
+        isRecordingVoiceClip = false
+
+        do {
+            let recording = try await voiceClipRecorder.stopRecording()
+            let clipId = UUID().uuidString
+            try await transport?.sendVoiceClip(
+                clipId: clipId, durationMs: recording.durationMs, audioData: recording.data
+            )
+            toastManager?.show(.voiceClip, message: "Voice clip sent to crew!")
+            startCooldown()
+        } catch {
+            print("[SessionStore] Voice clip send failed: \(error)")
+        }
+    }
+
+    func cancelRecordingVoiceClip() async {
+        isRecordingVoiceClip = false
+        await voiceClipRecorder.cancelRecording()
+    }
+
+    private func startCooldown() {
+        voiceClipCooldownActive = true
+        cooldownTask?.cancel()
+        cooldownTask = Task {
+            try? await Task.sleep(for: .seconds(15))
+            guard !Task.isCancelled else { return }
+            voiceClipCooldownActive = false
+        }
+    }
+
+    private func listenForVoiceClips(transport: SessionTransport) {
+        voiceClipListenTask?.cancel()
+        voiceClipListenTask = Task { [weak self] in
+            for await clip in transport.incomingVoiceClips {
+                guard !Task.isCancelled else { break }
+                await MainActor.run {
+                    self?.voiceClipPlayer.playClip(data: clip.audioData, senderName: clip.senderName)
+                }
+            }
+        }
+    }
+
     // MARK: - Private
 
     private func connectToStation(stationID: String, token: String) async throws {
@@ -168,6 +235,8 @@ final class SessionStore {
 
         try await engine.start(sessionID: stationID, token: token)
         self.syncEngine = engine
+        self.transport = transport
+        listenForVoiceClips(transport: transport)
     }
 
     // internal for testability

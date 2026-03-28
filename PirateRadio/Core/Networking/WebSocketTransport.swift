@@ -12,6 +12,9 @@ actor WebSocketTransport: SessionTransport {
     private let messageContinuation: AsyncStream<SyncMessage>.Continuation
     let incomingMessages: AsyncStream<SyncMessage>
 
+    private let voiceClipContinuation: AsyncStream<IncomingVoiceClip>.Continuation
+    let incomingVoiceClips: AsyncStream<IncomingVoiceClip>
+
     private let stateContinuation: AsyncStream<ConnectionState>.Continuation
     let connectionState: AsyncStream<ConnectionState>
 
@@ -28,6 +31,10 @@ actor WebSocketTransport: SessionTransport {
         let (msgStream, msgCont) = AsyncStream.makeStream(of: SyncMessage.self, bufferingPolicy: .bufferingNewest(50))
         self.incomingMessages = msgStream
         self.messageContinuation = msgCont
+
+        let (clipStream, clipCont) = AsyncStream.makeStream(of: IncomingVoiceClip.self, bufferingPolicy: .bufferingNewest(5))
+        self.incomingVoiceClips = clipStream
+        self.voiceClipContinuation = clipCont
 
         let (stateStream, stateCont) = AsyncStream.makeStream(of: ConnectionState.self, bufferingPolicy: .bufferingNewest(1))
         self.connectionState = stateStream
@@ -60,6 +67,31 @@ actor WebSocketTransport: SessionTransport {
         let serverJSON = Self.encodeForServer(message)
         let data = try JSONSerialization.data(withJSONObject: serverJSON)
         try await task.send(.data(data))
+    }
+
+    func sendVoiceClip(clipId: String, durationMs: Int, audioData: Data) async throws {
+        guard let task = webSocketTask else {
+            throw PirateRadioError.notConnected
+        }
+
+        let metadata: [String: Any] = [
+            "type": "voiceClip",
+            "clipId": clipId,
+            "durationMs": durationMs,
+        ]
+        let jsonData = try JSONSerialization.data(withJSONObject: metadata)
+
+        // Pack: 4-byte uint32 BE JSON length + JSON + audio
+        var frame = Data(count: 4)
+        let jsonLen = UInt32(jsonData.count)
+        frame[0] = UInt8((jsonLen >> 24) & 0xFF)
+        frame[1] = UInt8((jsonLen >> 16) & 0xFF)
+        frame[2] = UInt8((jsonLen >> 8) & 0xFF)
+        frame[3] = UInt8(jsonLen & 0xFF)
+        frame.append(jsonData)
+        frame.append(audioData)
+
+        try await task.send(.data(frame))
     }
 
     // MARK: - Connection
@@ -127,23 +159,49 @@ actor WebSocketTransport: SessionTransport {
             return
         }
 
-        guard let serverMessage = try? JSONDecoder().decode(ServerMessage.self, from: data) else {
-            print("[WebSocket] Failed to decode server message: \(String(data: data, encoding: .utf8) ?? "?")")
-            return
+        // Try to decode as JSON first. If it fails, check if it's a voice clip binary frame.
+        if let serverMessage = try? JSONDecoder().decode(ServerMessage.self, from: data) {
+            guard let syncMessage = Self.translate(serverMessage, rawData: data) else {
+                return
+            }
+
+            if syncMessage.sequenceNumber > lastSeenSeq {
+                lastSeenSeq = syncMessage.sequenceNumber
+            }
+            if syncMessage.epoch > lastSeenEpoch {
+                lastSeenEpoch = syncMessage.epoch
+            }
+
+            messageContinuation.yield(syncMessage)
+        } else if let clip = Self.parseVoiceClipFrame(data) {
+            voiceClipContinuation.yield(clip)
+        } else {
+            print("[WebSocket] Failed to decode message (\(data.count) bytes)")
+        }
+    }
+
+    /// Parse a single binary frame as a voice clip: 4-byte header + JSON metadata + audio.
+    static func parseVoiceClipFrame(_ data: Data) -> IncomingVoiceClip? {
+        guard data.count >= 6 else { return nil }
+
+        let jsonLen = Int(UInt32(data[0]) << 24 | UInt32(data[1]) << 16 | UInt32(data[2]) << 8 | UInt32(data[3]))
+        guard jsonLen > 0, jsonLen <= 1024, 4 + jsonLen < data.count else { return nil }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data[4..<(4 + jsonLen)]) as? [String: Any],
+              json["type"] as? String == "voiceClip",
+              let clipId = json["clipId"] as? String,
+              let senderName = json["senderName"] as? String,
+              let durationMs = json["durationMs"] as? Int else {
+            return nil
         }
 
-        guard let syncMessage = Self.translate(serverMessage, rawData: data) else {
-            return
-        }
-
-        if syncMessage.sequenceNumber > lastSeenSeq {
-            lastSeenSeq = syncMessage.sequenceNumber
-        }
-        if syncMessage.epoch > lastSeenEpoch {
-            lastSeenEpoch = syncMessage.epoch
-        }
-
-        messageContinuation.yield(syncMessage)
+        let audioData = data[(4 + jsonLen)...]
+        return IncomingVoiceClip(
+            clipId: clipId,
+            senderName: senderName,
+            durationMs: durationMs,
+            audioData: Data(audioData)
+        )
     }
 
     // MARK: - Server → Client Translation

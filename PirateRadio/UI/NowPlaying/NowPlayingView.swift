@@ -374,16 +374,26 @@ struct NowPlayingView: View {
 
 /// Large megaphone-style push-to-talk button for the bottom bar.
 struct MegaphoneButton: View {
-    @Environment(ToastManager.self) private var toastManager
+    @Environment(SessionStore.self) private var sessionStore
 
-    @State private var isRecording = false
     @State private var recordingProgress: Double = 0
     @State private var waveformLevels: [CGFloat] = Array(repeating: 0.2, count: 5)
+    @State private var waveformTask: Task<Void, Never>?
+    @State private var progressTask: Task<Void, Never>?
 
     private let maxRecordingSeconds: Double = 10
 
+    private var isRecording: Bool { sessionStore.isRecordingVoiceClip }
+    private var isDisabled: Bool { sessionStore.voiceClipCooldownActive }
+
     var body: some View {
         VStack(spacing: 2) {
+            // Incoming clip bubble
+            if let sender = sessionStore.voiceClipPlayer.currentlyPlayingSender {
+                incomingClipBubble(sender: sender)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             ZStack {
                 // Outer glow ring
                 Circle()
@@ -396,12 +406,15 @@ struct MegaphoneButton: View {
                     .frame(width: 52, height: 52)
                     .overlay(
                         Circle()
-                            .strokeBorder(PirateTheme.flare, lineWidth: isRecording ? 3 : 1.5)
+                            .strokeBorder(
+                                isDisabled ? PirateTheme.flare.opacity(0.3) : PirateTheme.flare,
+                                lineWidth: isRecording ? 3 : 1.5
+                            )
                     )
                     .overlay {
                         Image(systemName: "megaphone.fill")
                             .font(.system(size: 22))
-                            .foregroundStyle(PirateTheme.flare)
+                            .foregroundStyle(isDisabled ? PirateTheme.flare.opacity(0.3) : PirateTheme.flare)
                             .rotationEffect(.degrees(-15))
                     }
                     .scaleEffect(isRecording ? 1.15 : 1.0)
@@ -427,9 +440,9 @@ struct MegaphoneButton: View {
                 }
             }
 
-            Text("Broadcast")
+            Text(isDisabled ? "Cooldown" : "Broadcast")
                 .font(PirateTheme.body(9))
-                .foregroundStyle(PirateTheme.flare.opacity(isRecording ? 1 : 0.6))
+                .foregroundStyle(PirateTheme.flare.opacity(isRecording ? 1 : isDisabled ? 0.3 : 0.6))
         }
         .gesture(
             LongPressGesture(minimumDuration: 0.1)
@@ -438,15 +451,48 @@ struct MegaphoneButton: View {
                     .onEnded { _ in stopRecording() }
                 )
         )
+        .disabled(isDisabled)
         .sensoryFeedback(.impact(weight: .medium), trigger: isRecording)
+        .animation(.spring(duration: 0.3), value: sessionStore.voiceClipPlayer.currentlyPlayingSender != nil)
+    }
+
+    private func incomingClipBubble(sender: String) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(PirateTheme.signal.opacity(0.2))
+                .frame(width: 24, height: 24)
+                .overlay {
+                    Text(String(sender.prefix(1)).uppercased())
+                        .font(PirateTheme.display(10))
+                        .foregroundStyle(PirateTheme.signal)
+                }
+
+            HStack(spacing: 2) {
+                ForEach(0..<5, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(PirateTheme.signal.opacity(0.5))
+                        .frame(width: 3, height: CGFloat.random(in: 4...14))
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(PirateTheme.void.opacity(0.9)))
+        .overlay(Capsule().strokeBorder(PirateTheme.signal.opacity(0.2), lineWidth: 0.5))
     }
 
     private func startRecording() {
-        isRecording = true
+        guard !isDisabled else { return }
         recordingProgress = 0
 
         Task {
-            while !Task.isCancelled && isRecording {
+            try? await sessionStore.startRecordingVoiceClip()
+        }
+
+        // Animate waveform
+        waveformTask = Task {
+            while !Task.isCancelled {
+                guard sessionStore.isRecordingVoiceClip else { break }
                 withAnimation(.easeInOut(duration: 0.15)) {
                     waveformLevels = (0..<5).map { _ in CGFloat.random(in: 0.15...1.0) }
                 }
@@ -454,25 +500,32 @@ struct MegaphoneButton: View {
             }
         }
 
-        Task {
+        // Animate progress
+        progressTask = Task {
             let steps = 100
             for i in 0...steps {
-                guard !Task.isCancelled && isRecording else { break }
+                guard !Task.isCancelled, sessionStore.isRecordingVoiceClip else { break }
                 withAnimation(.linear(duration: maxRecordingSeconds / Double(steps))) {
                     recordingProgress = Double(i) / Double(steps)
                 }
                 try? await Task.sleep(for: .seconds(maxRecordingSeconds / Double(steps)))
             }
-            if isRecording { stopRecording() }
+            if sessionStore.isRecordingVoiceClip {
+                stopRecording()
+            }
         }
     }
 
     private func stopRecording() {
-        guard isRecording else { return }
-        isRecording = false
+        guard sessionStore.isRecordingVoiceClip else { return }
         recordingProgress = 0
         waveformLevels = Array(repeating: 0.2, count: 5)
-        toastManager.show(.voiceClip, message: "Voice clip sent to crew!")
+        waveformTask?.cancel()
+        progressTask?.cancel()
+
+        Task {
+            await sessionStore.stopRecordingVoiceClip()
+        }
     }
 }
 

@@ -6,6 +6,7 @@ actor MockSessionTransport: SessionTransport {
     // MARK: - Captured State
 
     private(set) var sentMessages: [SyncMessage] = []
+    private(set) var sentVoiceClips: [(clipId: String, durationMs: Int, audioData: Data)] = []
     private(set) var isConnected = false
     private(set) var lastSessionID: SessionID?
 
@@ -14,6 +15,9 @@ actor MockSessionTransport: SessionTransport {
     let incomingMessages: AsyncStream<SyncMessage>
     private let messageContinuation: AsyncStream<SyncMessage>.Continuation
 
+    let incomingVoiceClips: AsyncStream<IncomingVoiceClip>
+    private let voiceClipContinuation: AsyncStream<IncomingVoiceClip>.Continuation
+
     let connectionState: AsyncStream<ConnectionState>
     private let stateContinuation: AsyncStream<ConnectionState>.Continuation
 
@@ -21,6 +25,10 @@ actor MockSessionTransport: SessionTransport {
         let (msgStream, msgCont) = AsyncStream.makeStream(of: SyncMessage.self, bufferingPolicy: .bufferingNewest(50))
         self.incomingMessages = msgStream
         self.messageContinuation = msgCont
+
+        let (clipStream, clipCont) = AsyncStream.makeStream(of: IncomingVoiceClip.self, bufferingPolicy: .bufferingNewest(5))
+        self.incomingVoiceClips = clipStream
+        self.voiceClipContinuation = clipCont
 
         let (stateStream, stateCont) = AsyncStream.makeStream(of: ConnectionState.self, bufferingPolicy: .bufferingNewest(1))
         self.connectionState = stateStream
@@ -44,6 +52,10 @@ actor MockSessionTransport: SessionTransport {
         sentMessages.append(message)
     }
 
+    func sendVoiceClip(clipId: String, durationMs: Int, audioData: Data) async throws {
+        sentVoiceClips.append((clipId: clipId, durationMs: durationMs, audioData: audioData))
+    }
+
     // MARK: - Test Helpers
 
     /// Simulate receiving a message from the server.
@@ -56,8 +68,14 @@ actor MockSessionTransport: SessionTransport {
         stateContinuation.yield(state)
     }
 
+    /// Simulate receiving a voice clip from another member.
+    func injectVoiceClip(_ clip: IncomingVoiceClip) {
+        voiceClipContinuation.yield(clip)
+    }
+
     /// Clear captured messages.
     func reset() {
         sentMessages.removeAll()
+        sentVoiceClips.removeAll()
     }
 }
