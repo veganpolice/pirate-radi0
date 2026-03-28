@@ -15,7 +15,7 @@
 		1C3C82B031A3FA11A4FE2211 /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6F1985D5C90696925126EEA /* NowPlayingView.swift */; };
 		289E23F6842B17069691ED11 /* MockMusicSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121D1193A02E1188D993C4A3 /* MockMusicSource.swift */; };
 		2F58E8039C295B038D93EE6F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACFBFA27C23C7AB6F0C857F /* AppDelegate.swift */; };
-		3017E628F6D9A5281095ADBC /* RequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33A70C95D0D61E8C88D1591A /* RequestsView.swift */; };
+
 		3841354410B4BBA56538044D /* Kronos in Frameworks */ = {isa = PBXBuildFile; productRef = 808F79ADA3F3C0F7A40DC874 /* Kronos */; };
 		3DAD82500573D58C0BDAED4E /* SessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7944EEB43CBF9D74199648 /* SessionStoreTests.swift */; };
 		40BC5EEB1F45E1A8307BD730 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBFF43CD7897184B467A999 /* MockData.swift */; };
@@ -98,7 +98,7 @@
 		294850AD862E01D2FB15F322 /* PirateRadio.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PirateRadio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		29613A51683EAA6F8E721402 /* SpotifyAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuthView.swift; sourceTree = "<group>"; };
 		3300E55067FB25A93B553D1C /* ClockProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockProvider.swift; sourceTree = "<group>"; };
-		33A70C95D0D61E8C88D1591A /* RequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsView.swift; sourceTree = "<group>"; };
+
 		34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioTests.swift; sourceTree = "<group>"; };
 		358DBF75544F644C797C711E /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
 		38EF73C4983CA0C2182E6FD2 /* BPMGauge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPMGauge.swift; sourceTree = "<group>"; };
@@ -399,7 +399,7 @@
 				D2198441C050E13DC4038C08 /* HotSeatBanner.swift */,
 				D6F1985D5C90696925126EEA /* NowPlayingView.swift */,
 				CDA5B57F1A7F1BBAAFD10ABB /* QueueView.swift */,
-				33A70C95D0D61E8C88D1591A /* RequestsView.swift */,
+
 				695D4EC6D5CCEFEC511B2BB2 /* SessionRecapView.swift */,
 				0AE84CFC1C0588A8910FF0E4 /* SignalLostOverlay.swift */,
 			);
@@ -546,7 +546,7 @@
 				6760506C519822D45A5D265A /* PirateRadioError.swift in Sources */,
 				EBDEB57FD74A698E940ECD1E /* PirateTheme.swift in Sources */,
 				5B116B429BAA1B88A4DD1B09 /* QueueView.swift in Sources */,
-				3017E628F6D9A5281095ADBC /* RequestsView.swift in Sources */,
+
 				984FB2FAD9A80976D31A30F0 /* ServerMessage.swift in Sources */,
 				548613E89C576931E5791F2A /* Session.swift in Sources */,
 				DD43C9013B4D08E85474446D /* SessionLobbyView.swift in Sources */,

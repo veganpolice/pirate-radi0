@@ -8,7 +8,6 @@ struct NowPlayingView: View {
     @Environment(ToastManager.self) private var toastManager
 
     @State private var showQueue = false
-    @State private var showRequests = false
     @State private var showSettings = false
     @State private var showMemberProfile: Session.Member?
     @State private var showSignalLost = false
@@ -25,11 +24,8 @@ struct NowPlayingView: View {
     @State private var showControls = false
     @State private var showCrew = false
 
-    // Request badge count — derived from queue in real mode, demo uses static count
-    @State private var pendingRequestCount = PirateRadioApp.demoMode ? 5 : 0
-
     private var anySheetPresented: Bool {
-        showQueue || showRequests || showSettings || showMemberProfile != nil
+        showQueue || showSettings || showMemberProfile != nil
     }
 
     var body: some View {
@@ -53,7 +49,6 @@ struct NowPlayingView: View {
             SignalLostOverlay(isActive: $showSignalLost)
         }
         .sheet(isPresented: $showQueue) { QueueView() }
-        .sheet(isPresented: $showRequests) { RequestsView() }
         .sheet(isPresented: $showSettings) { SessionSettingsView() }
         .sheet(item: $showMemberProfile) { member in
             MemberProfileCard(member: member)
@@ -164,29 +159,6 @@ struct NowPlayingView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 0) {
-            // Messages / Requests
-            Button { showRequests = true } label: {
-                ZStack(alignment: .topTrailing) {
-                    VStack(spacing: 3) {
-                        Image(systemName: "tray.full")
-                            .font(.system(size: 20, weight: .medium))
-                        Text("Messages")
-                            .font(PirateTheme.body(9))
-                    }
-
-                    if pendingRequestCount > 0 {
-                        Text("\(pendingRequestCount)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 16, height: 16)
-                            .background(Circle().fill(.red))
-                            .offset(x: 8, y: -4)
-                    }
-                }
-                .foregroundStyle(PirateTheme.signal.opacity(0.6))
-            }
-            .frame(maxWidth: .infinity, minHeight: 50)
-
             // Megaphone (walkie-talkie) — bigger, central
             MegaphoneButton()
                 .frame(maxWidth: .infinity, minHeight: 50)
