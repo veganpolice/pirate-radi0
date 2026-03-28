@@ -151,6 +151,10 @@ final class SessionStore {
         await syncEngine?.sendSkip()
     }
 
+    func toggleMute() async {
+        await syncEngine?.toggleLocalMute()
+    }
+
     // MARK: - Private
 
     private func connectToStation(stationID: String, token: String) async throws {

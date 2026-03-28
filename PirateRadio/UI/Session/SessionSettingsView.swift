@@ -92,6 +92,7 @@ struct StationSettingsView: View {
     private var actionsSection: some View {
         Section {
             Button("Leave Station") {
+                dismiss()
                 Task { await sessionStore.leaveSession() }
             }
             .font(PirateTheme.body(16))
