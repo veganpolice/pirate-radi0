@@ -18,8 +18,8 @@ struct FrequencyDial: View {
     private let tickCount = 20
 
     // FM band range for frequency-to-dial mapping
-    private let fmMin: Double = 88.0
-    private let fmMax: Double = 108.0
+    static let fmMin: Double = 88.0
+    static let fmMax: Double = 108.0
 
     /// The dial value (0–1) for the currently selected station.
     private var dialValue: Double {
@@ -69,7 +69,7 @@ struct FrequencyDial: View {
                 // Center knob
                 Circle()
                     .fill(PirateTheme.void)
-                    .frame(width: size * 0.35, height: size * 0.35)
+                    .frame(width: size * 0.4, height: size * 0.4)
                     .overlay(
                         Circle()
                             .strokeBorder(color.opacity(0.5), lineWidth: 1)
@@ -109,13 +109,14 @@ struct FrequencyDial: View {
     @ViewBuilder
     private func centerLabel(size: CGFloat) -> some View {
         if let station = selectedStation {
-            VStack(spacing: 2) {
-                Text(station.name)
-                    .font(PirateTheme.display(size * 0.09))
+            VStack(spacing: 1) {
+                Text(String(format: "%.1f", station.frequency))
+                    .font(PirateTheme.display(size * 0.1))
                     .foregroundStyle(color)
                     .lineLimit(1)
-                Text(String(format: "%.1f FM", station.frequency))
-                    .font(PirateTheme.body(size * 0.055))
+                    .minimumScaleFactor(0.7)
+                Text("PR")
+                    .font(PirateTheme.body(size * 0.06))
                     .foregroundStyle(color.opacity(0.7))
                 if station.listenerCount > 0 {
                     Text("\(station.listenerCount) listening")
@@ -123,7 +124,7 @@ struct FrequencyDial: View {
                         .foregroundStyle(.white.opacity(0.4))
                 }
             }
-            .frame(width: size * 0.3)
+            .frame(width: size * 0.35)
         } else {
             Text("NO SIGNAL")
                 .font(PirateTheme.display(size * 0.07))
@@ -205,6 +206,6 @@ struct FrequencyDial: View {
     }
 
     private func frequencyToDialValue(_ frequency: Double) -> Double {
-        (frequency - fmMin) / (fmMax - fmMin)
+        (frequency - Self.fmMin) / (Self.fmMax - Self.fmMin)
     }
 }
