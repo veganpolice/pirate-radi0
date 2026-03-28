@@ -63,6 +63,15 @@
 		EBDEB57FD74A698E940ECD1E /* PirateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286E17C8D1EE92CA55C94361 /* PirateTheme.swift */; };
 		FB2F94D4CA85F21F198002E1 /* SessionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E74DECE41C50E3D1473600E /* SessionSettingsView.swift */; };
 		FB5940930C687FC0BDAC32C9 /* SessionRecapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695D4EC6D5CCEFEC511B2BB2 /* SessionRecapView.swift */; };
+		AA1001010101010101010101 /* SpeedProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2001010101010101010101 /* SpeedProvider.swift */; };
+		AA1002020202020202020202 /* VolumeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2002020202020202020202 /* VolumeController.swift */; };
+		AA1003030303030303030303 /* SpeedVolumeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2003030303030303030303 /* SpeedVolumeSettings.swift */; };
+		AA1004040404040404040404 /* MockSpeedProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2004040404040404040404 /* MockSpeedProvider.swift */; };
+		AA1005050505050505050505 /* MockVolumeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2005050505050505050505 /* MockVolumeController.swift */; };
+		AA1006060606060606060606 /* SpeedVolumeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2006060606060606060606 /* SpeedVolumeManager.swift */; };
+		AA1007070707070707070707 /* GPSSpeedProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2007070707070707070707 /* GPSSpeedProvider.swift */; };
+		AA1008080808080808080808 /* SystemVolumeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2008080808080808080808 /* SystemVolumeController.swift */; };
+		AA1009090909090909090909 /* SpeedVolumeManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2009090909090909090909 /* SpeedVolumeManagerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -134,6 +143,15 @@
 		F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRTStaticOverlay.swift; sourceTree = "<group>"; };
 		F98ECD25694E483F36914616 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		FFB9A4F079DC929B0FDFBD60 /* GloveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GloveButton.swift; sourceTree = "<group>"; };
+		AA2001010101010101010101 /* SpeedProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedProvider.swift; sourceTree = "<group>"; };
+		AA2002020202020202020202 /* VolumeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeController.swift; sourceTree = "<group>"; };
+		AA2003030303030303030303 /* SpeedVolumeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedVolumeSettings.swift; sourceTree = "<group>"; };
+		AA2004040404040404040404 /* MockSpeedProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSpeedProvider.swift; sourceTree = "<group>"; };
+		AA2005050505050505050505 /* MockVolumeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockVolumeController.swift; sourceTree = "<group>"; };
+		AA2006060606060606060606 /* SpeedVolumeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedVolumeManager.swift; sourceTree = "<group>"; };
+		AA2007070707070707070707 /* GPSSpeedProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPSSpeedProvider.swift; sourceTree = "<group>"; };
+		AA2008080808080808080808 /* SystemVolumeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemVolumeController.swift; sourceTree = "<group>"; };
+		AA2009090909090909090909 /* SpeedVolumeManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedVolumeManagerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -162,6 +180,7 @@
 			children = (
 				9A84A72518AFAE7CD71F9A95 /* PirateRadioError.swift */,
 				A9E36B2DD0E2E2D8527ED28D /* Session.swift */,
+				AA2003030303030303030303 /* SpeedVolumeSettings.swift */,
 				B953E220C23B403537F65D2F /* Station.swift */,
 				227D358A247C684183CB4B21 /* SyncCommand.swift */,
 				72354CBBD5BF61C4BA07752D /* Track.swift */,
@@ -213,6 +232,8 @@
 				46ED29ACB39D7297C647163D /* MockClockProvider.swift */,
 				121D1193A02E1188D993C4A3 /* MockMusicSource.swift */,
 				A827E3CA365E7EA1C6046F08 /* MockSessionTransport.swift */,
+				AA2004040404040404040404 /* MockSpeedProvider.swift */,
+				AA2005050505050505050505 /* MockVolumeController.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -241,6 +262,7 @@
 			isa = PBXGroup;
 			children = (
 				34BCDC3A11B9AEB976EB3FE7 /* PirateRadioTests.swift */,
+				AA2009090909090909090909 /* SpeedVolumeManagerTests.swift */,
 				4C00BA13BF7A9BD612650DB7 /* WireProtocolTests.swift */,
 			);
 			path = PirateRadioTests;
@@ -285,9 +307,28 @@
 			path = Theme;
 			sourceTree = "<group>";
 		};
+		AA3001010101010101010101 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				AA2006060606060606060606 /* SpeedVolumeManager.swift */,
+				AA2008080808080808080808 /* SystemVolumeController.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+		AA3002020202020202020202 /* Location */ = {
+			isa = PBXGroup;
+			children = (
+				AA2007070707070707070707 /* GPSSpeedProvider.swift */,
+			);
+			path = Location;
+			sourceTree = "<group>";
+		};
 		8801395A1EB8DACAB0736AF5 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				AA3001010101010101010101 /* Audio */,
+				AA3002020202020202020202 /* Location */,
 				C9A015D1C3038EDAFAD4F294 /* Mock */,
 				3B384C096F430EB93BF91B8B /* Mocks */,
 				12262072FEF143759864C3C5 /* Models */,
@@ -347,6 +388,8 @@
 				3300E55067FB25A93B553D1C /* ClockProvider.swift */,
 				8D7BDA6F7912995007E65EE2 /* MusicSource.swift */,
 				930F0CA3C4206C3B520DED51 /* SessionTransport.swift */,
+				AA2001010101010101010101 /* SpeedProvider.swift */,
+				AA2002020202020202020202 /* VolumeController.swift */,
 			);
 			path = Protocols;
 			sourceTree = "<group>";
@@ -540,6 +583,14 @@
 				CA1FB9FCD73ED9CDBA07D7E2 /* VinylArtView.swift in Sources */,
 				41BC77BD716ECF265A8DB6D7 /* WalkieTalkieButton.swift in Sources */,
 				BAAC31A01976E64BCF51669C /* WebSocketTransport.swift in Sources */,
+				AA1001010101010101010101 /* SpeedProvider.swift in Sources */,
+				AA1002020202020202020202 /* VolumeController.swift in Sources */,
+				AA1003030303030303030303 /* SpeedVolumeSettings.swift in Sources */,
+				AA1004040404040404040404 /* MockSpeedProvider.swift in Sources */,
+				AA1005050505050505050505 /* MockVolumeController.swift in Sources */,
+				AA1006060606060606060606 /* SpeedVolumeManager.swift in Sources */,
+				AA1007070707070707070707 /* GPSSpeedProvider.swift in Sources */,
+				AA1008080808080808080808 /* SystemVolumeController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -548,6 +599,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C272F9E948BD5979306D92A7 /* PirateRadioTests.swift in Sources */,
+				AA1009090909090909090909 /* SpeedVolumeManagerTests.swift in Sources */,
 				CB2566BF70FEED4613734552 /* WireProtocolTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
