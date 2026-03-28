@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The radio dial home screen. Auto-tunes on appear, shows live stations
-/// as notches on the dial. Tap a station to tune in.
+/// The radio dial home screen. Previews station audio as you scrub the dial,
+/// then tap to tune in. Voice clips work once tuned in.
 struct DialHomeView: View {
     @Environment(SessionStore.self) private var sessionStore
 
@@ -22,6 +22,11 @@ struct DialHomeView: View {
                     value: $dialValue,
                     color: PirateTheme.signal,
                     stations: sessionStore.stations,
+                    onDetentSnap: { _ in
+                        // Preview audio when the dial snaps to a station during drag
+                        let snapped = snappedStation
+                        sessionStore.previewStation(snapped)
+                    },
                     onTuneToStation: { station in
                         sessionStore.tuneToStation(station)
                     }
@@ -43,11 +48,33 @@ struct DialHomeView: View {
             await sessionStore.autoTune()
         }
         .onChange(of: sessionStore.session) { oldValue, newValue in
-            // Re-fetch stations when returning from a session
+            // Re-fetch stations and resume preview when returning from a session
             if oldValue != nil && newValue == nil {
-                Task { await sessionStore.fetchStations() }
+                Task {
+                    await sessionStore.fetchStations()
+                    sessionStore.previewStation(sessionStore.previewingStation)
+                }
             }
         }
+    }
+
+    // MARK: - Helpers
+
+    /// The station closest to the current dial position.
+    private var snappedStation: Station? {
+        guard !sessionStore.stations.isEmpty else { return nil }
+        var closest: Station?
+        var closestDist = Double.infinity
+        let fmMin = 88.0, fmMax = 108.0
+        for station in sessionStore.stations {
+            let stationValue = (station.frequency - fmMin) / (fmMax - fmMin)
+            let dist = abs(dialValue - stationValue)
+            if dist < closestDist && dist < 0.08 {
+                closestDist = dist
+                closest = station
+            }
+        }
+        return closest
     }
 
     // MARK: - Subviews
