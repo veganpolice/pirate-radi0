@@ -19,6 +19,7 @@ const MAX_TRACK_DURATION_MS = 30 * 60 * 1000; // 30 minutes — clamp for timer 
 const MAX_QUEUE_SIZE = 100;
 const MAX_HISTORY_SIZE = 200; // cap history to prevent unbounded memory growth
 const SKIP_COOLDOWN_MS = 3_000; // 1 skip per 3 seconds per station
+const LISTENER_GRACE_MS = 10 * 60 * 1000; // 10 minutes — keep listener visible after disconnect
 
 // --- In-Memory State ---
 
@@ -75,6 +76,7 @@ function bootStations() {
       history: existing?.history || [],
       advancementTimer: null,
       lastSkipTime: 0,
+      listeners: new Map(), // userId → { displayName, firstSeen, lastSeen, connected }
     };
 
     stations.set(def.id, station);
@@ -106,6 +108,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root redirect to monitor
+app.get("/", (_req, res) => res.redirect("/monitor"));
+
 // Health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", stations: stations.size });
@@ -113,8 +118,23 @@ app.get("/health", (_req, res) => {
 
 // Admin: list all stations
 app.get("/admin/stations", (_req, res) => {
+  const now = Date.now();
   const result = [];
   for (const station of stations.values()) {
+    // Build listeners list: connected members + recently disconnected (within grace period)
+    const listeners = [];
+    for (const [uid, l] of station.listeners) {
+      if (l.connected || (now - l.lastSeen < LISTENER_GRACE_MS)) {
+        listeners.push({
+          userId: uid,
+          displayName: l.displayName,
+          firstSeen: l.firstSeen,
+          lastSeen: l.lastSeen,
+          connected: l.connected,
+        });
+      }
+    }
+
     result.push({
       id: station.id,
       name: station.name,
@@ -125,6 +145,7 @@ app.get("/admin/stations", (_req, res) => {
         joinedAt: m.joinedAt,
         alive: m.alive,
       })),
+      listeners,
       epoch: station.epoch,
       sequence: station.sequence,
       currentTrack: station.currentTrack,
@@ -255,6 +276,16 @@ wss.on("connection", (ws) => {
     alive: true,
     joinedAt: Date.now(),
   });
+
+  // Track listener presence (persists beyond WS disconnect)
+  const existing = station.listeners.get(userId);
+  station.listeners.set(userId, {
+    displayName,
+    firstSeen: existing?.firstSeen || Date.now(),
+    lastSeen: Date.now(),
+    connected: true,
+  });
+
   console.log(`[ws] connected: ${displayName} (${userId}) to ${station.name}, members=${station.members.size}`);
 
   // Send station snapshot to joiner
@@ -291,6 +322,14 @@ wss.on("connection", (ws) => {
     const member = station.members.get(userId);
     if (member?.ws === ws) {
       station.members.delete(userId);
+
+      // Mark listener as disconnected (stays visible during grace period)
+      const listener = station.listeners.get(userId);
+      if (listener) {
+        listener.connected = false;
+        listener.lastSeen = Date.now();
+      }
+
       broadcastToStation(station, {
         type: "memberLeft",
         data: { userId },
@@ -502,22 +541,38 @@ function authenticateHTTP(req, res, next) {
 // --- Ping/Pong ---
 
 setInterval(() => {
+  const now = Date.now();
   for (const station of stations.values()) {
     for (const [userId, member] of station.members) {
       if (!member.alive) {
         member.ws.terminate();
         station.members.delete(userId);
+
+        // Mark listener as disconnected
+        const listener = station.listeners.get(userId);
+        if (listener) {
+          listener.connected = false;
+          listener.lastSeen = now;
+        }
+
         broadcastToStation(station, {
           type: "memberLeft",
           data: { userId },
           epoch: station.epoch,
           seq: ++station.sequence,
-          timestamp: Date.now(),
+          timestamp: now,
         });
         continue;
       }
       member.alive = false;
       member.ws.ping();
+    }
+
+    // Prune expired listeners
+    for (const [uid, l] of station.listeners) {
+      if (!l.connected && (now - l.lastSeen >= LISTENER_GRACE_MS)) {
+        station.listeners.delete(uid);
+      }
     }
   }
 }, PING_INTERVAL_MS);
