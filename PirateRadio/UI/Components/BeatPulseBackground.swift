@@ -66,16 +66,6 @@ struct BeatPulseBackground: View {
                     index: 1
                 )
 
-                WarpBlob(
-                    color: zoneColor.opacity(0.5),
-                    baseSize: max(geo.size.width, geo.size.height) * 0.8,
-                    anchor: UnitPoint(x: 0.5, y: 0.85),
-                    breathePhase: breathePhase,
-                    driftSpeed: 18,
-                    rotationRange: 60,
-                    index: 2
-                )
-
                 // Layer 2: Spawned rings — each keeps its birth position
                 ForEach(spawnedRings) { ring in
                     SpawnedRingView(ring: ring)
@@ -84,6 +74,7 @@ struct BeatPulseBackground: View {
                 // Layer 3: Scan line
                 scanLine(size: geo.size)
             }
+            .drawingGroup()
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -121,8 +112,8 @@ struct BeatPulseBackground: View {
                     withAnimation(.spring(duration: 0.3)) {
                         spawnedRings.append(ring)
                     }
-                    if spawnedRings.count > 15 {
-                        spawnedRings.removeFirst(spawnedRings.count - 15)
+                    if spawnedRings.count > 6 {
+                        spawnedRings.removeFirst(spawnedRings.count - 6)
                     }
                 }
                 try? await Task.sleep(for: .seconds(Double.random(in: 2...3.5)))
@@ -197,7 +188,6 @@ private struct WarpBlob: View {
             .rotationEffect(.degrees(rotation))
             .offset(x: offsetX, y: offsetY)
             .opacity(opacity)
-            .blur(radius: baseSize * 0.08)
             .position(x: anchor.x * UIScreen.main.bounds.width,
                       y: anchor.y * UIScreen.main.bounds.height)
             .onAppear {

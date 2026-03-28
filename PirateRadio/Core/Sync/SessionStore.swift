@@ -306,12 +306,23 @@ final class SessionStore {
 
     func pause() async {
         guard isDJ else { return }
-        try? await syncEngine?.djPause()
+        // Optimistic: update UI immediately
+        session?.isPlaying = false
+        do {
+            try await syncEngine?.djPause()
+        } catch {
+            session?.isPlaying = true
+        }
     }
 
     func resume() async {
         guard isDJ else { return }
-        try? await syncEngine?.djResume()
+        session?.isPlaying = true
+        do {
+            try await syncEngine?.djResume()
+        } catch {
+            session?.isPlaying = false
+        }
     }
 
     func seek(to positionMs: Int) async {
@@ -329,8 +340,14 @@ final class SessionStore {
 
     func skipToNext() async {
         guard isDJ else { return }
-        guard session?.queue.isEmpty == false else { return }
+        guard let queue = session?.queue, !queue.isEmpty else { return }
+        // Optimistic: advance to next track immediately
+        let previousTrack = session?.currentTrack
+        let previousQueue = session?.queue
+        session?.currentTrack = queue.first
+        session?.queue = Array(queue.dropFirst())
         await syncEngine?.sendSkip()
+        // Note: if server rejects, stateSync will correct us
     }
 
     // MARK: - Private
@@ -349,6 +366,11 @@ final class SessionStore {
             Task { @MainActor in
                 self?.handleUpdate(update)
             }
+        }
+
+        // Pre-warm Spotify connection so first play is instant
+        if !authManager.isConnectedToSpotifyApp {
+            Task { await ensureSpotifyConnected() }
         }
 
         try await engine.start(sessionID: sessionID, token: token)

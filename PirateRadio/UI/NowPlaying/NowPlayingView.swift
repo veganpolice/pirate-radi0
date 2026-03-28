@@ -15,6 +15,8 @@ struct NowPlayingView: View {
     @State private var chairliftMode = false
 
     @State private var isMuted = false
+    @State private var seekBackTrigger = false
+    @State private var skipTrigger = false
 
     // Staggered entrance
     @State private var showArt = false
@@ -26,13 +28,17 @@ struct NowPlayingView: View {
     // Request badge count — derived from queue in real mode, demo uses static count
     @State private var pendingRequestCount = PirateRadioApp.demoMode ? 5 : 0
 
+    private var anySheetPresented: Bool {
+        showQueue || showRequests || showSettings || showMemberProfile != nil
+    }
+
     var body: some View {
         ZStack {
             PirateTheme.void.ignoresSafeArea()
 
-            // Pulsing beat background — behind all UI
+            // Pulsing beat background — paused when sheets are open
             BeatPulseBackground(
-                isPlaying: sessionStore.session?.isPlaying ?? false,
+                isPlaying: !anySheetPresented && (sessionStore.session?.isPlaying ?? false),
                 members: sessionStore.session?.members ?? [],
                 djUserID: sessionStore.session?.djUserID ?? ""
             )
@@ -237,7 +243,7 @@ struct NowPlayingView: View {
                         Text(track.name)
                             .font(PirateTheme.display(20))
                             .foregroundStyle(PirateTheme.signal)
-                            .neonGlow(PirateTheme.signal, intensity: 0.5)
+                            .neonGlowFull(PirateTheme.signal, intensity: 0.5)
                             .lineLimit(2)
                             .multilineTextAlignment(.trailing)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -303,13 +309,14 @@ struct NowPlayingView: View {
         HStack(spacing: 20) {
             // Seek back
             Button {
+                seekBackTrigger.toggle()
                 Task { await sessionStore.seek(to: 0) }
             } label: {
                 Image(systemName: "backward.fill")
                     .font(.title2)
             }
             .frame(minWidth: 52, minHeight: 52)
-            .sensoryFeedback(.impact(weight: .light), trigger: UUID())
+            .sensoryFeedback(.impact(weight: .light), trigger: seekBackTrigger)
 
             // Mute / Unmute (main button)
             Button {
@@ -351,6 +358,7 @@ struct NowPlayingView: View {
 
             // Skip
             Button {
+                skipTrigger.toggle()
                 if PirateRadioApp.demoMode {
                     sessionStore.demoSkipToNext()
                 } else {
@@ -362,7 +370,7 @@ struct NowPlayingView: View {
             }
             .disabled(sessionStore.session?.queue.isEmpty != false)
             .frame(minWidth: 52, minHeight: 52)
-            .sensoryFeedback(.impact(weight: .light), trigger: UUID())
+            .sensoryFeedback(.impact(weight: .light), trigger: skipTrigger)
         }
         .foregroundStyle(PirateTheme.broadcast)
         .padding(.vertical, 8)
@@ -390,11 +398,11 @@ struct NowPlayingView: View {
     // MARK: - Entrance Animation
 
     private func startEntranceAnimation() {
-        withAnimation(.spring(duration: 0.5)) { showArt = true }
-        withAnimation(.spring(duration: 0.5).delay(0.2)) { showTitle = true }
-        withAnimation(.spring(duration: 0.5).delay(0.4)) { showProgress = true }
-        withAnimation(.spring(duration: 0.5).delay(0.6)) { showControls = true }
-        withAnimation(.spring(duration: 0.5).delay(0.8)) { showCrew = true }
+        withAnimation(.spring(duration: 0.35)) { showArt = true }
+        withAnimation(.spring(duration: 0.35).delay(0.05)) { showTitle = true }
+        withAnimation(.spring(duration: 0.35).delay(0.10)) { showProgress = true }
+        withAnimation(.spring(duration: 0.35).delay(0.15)) { showControls = true }
+        withAnimation(.spring(duration: 0.35).delay(0.20)) { showCrew = true }
     }
 
     // MARK: - Debug Shake

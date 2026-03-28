@@ -98,16 +98,9 @@ struct DiscoveryView: View {
     private func sessionRow(_ session: MockData.DiscoverySession, isHighlighted: Bool) -> some View {
         HStack(spacing: 12) {
             // Mini album art
-            if let url = session.nowPlaying.albumArtURL {
-                AsyncImage(url: url) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(PirateTheme.signal.opacity(0.1))
-                }
+            CachedAsyncImage(url: session.nowPlaying.albumArtURL)
                 .frame(width: 44, height: 44)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {

@@ -130,16 +130,9 @@ struct QueueView: View {
     private func trackRow(_ track: Track, isResult: Bool) -> some View {
         HStack(spacing: 12) {
             // Album art thumbnail
-            if let url = track.albumArtURL {
-                AsyncImage(url: url) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(PirateTheme.signal.opacity(0.1))
-                }
+            CachedAsyncImage(url: track.albumArtURL)
                 .frame(width: 44, height: 44)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.name)

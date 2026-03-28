@@ -73,12 +73,12 @@ struct TrackProgressBar: View {
         .onAppear {
             elapsedMs = initialPositionMs
         }
-        .task {
-            // Animate progress using a timer
+        .task(id: isPlaying) {
+            guard isPlaying else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard !Task.isCancelled else { break }
-                if isPlaying && !isDragging {
+                if !isDragging {
                     withAnimation(.linear(duration: 0.5)) {
                         elapsedMs = min(elapsedMs + 500, Double(durationMs))
                     }
