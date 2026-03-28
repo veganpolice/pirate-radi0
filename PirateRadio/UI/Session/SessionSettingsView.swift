@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Settings sheet for the current station.
 /// Shows members, chairlift mode toggle, and leave button.
-struct StationSettingsView: View {
+struct SessionSettingsView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(\.dismiss) private var dismiss
 

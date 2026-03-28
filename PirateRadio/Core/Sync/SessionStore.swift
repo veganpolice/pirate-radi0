@@ -25,6 +25,7 @@ final class SessionStore {
 
     private(set) var stations: [Station] = []
     private(set) var isAutoTuning = false
+    private(set) var previewingStation: Station?
     private var tuneTask: Task<Void, Never>?
     private var spotifyWakeTask: Task<Void, Never>?
     private var tuneGeneration: UUID = UUID()
@@ -176,6 +177,11 @@ final class SessionStore {
         if error == nil {
             UserDefaults.standard.set(target.userId, forKey: "lastTunedUserId")
         }
+    }
+
+    /// Set the station currently being previewed on the dial.
+    func previewStation(_ station: Station?) {
+        previewingStation = station
     }
 
     /// Tune to a specific station from the dial. Cancel-and-replace for rapid switching.

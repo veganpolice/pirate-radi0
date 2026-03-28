@@ -176,15 +176,18 @@ enum MockData {
     /// Members who aren't in the initial session — they join over time.
     static let lateJoiners: [Session.Member] = Array(members.dropFirst(2))
 
-    static func demoSession() -> Session {
+    static func demoSession(djMode: DJMode = .solo) -> Session {
         Session(
             id: "station-88",
             stationName: "88.🏴‍☠️",
+            joinCode: "PIRATE",
+            djUserID: "demo-user-1",
             members: Array(members.prefix(2)),
             queue: demoQueue,
             currentTrack: tracks[0],
             isPlaying: true,
-            epoch: 1
+            epoch: 1,
+            djMode: djMode
         )
     }
 }

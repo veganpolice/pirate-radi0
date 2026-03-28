@@ -21,7 +21,6 @@
 		40BC5EEB1F45E1A8307BD730 /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBFF43CD7897184B467A999 /* MockData.swift */; };
 		41BC77BD716ECF265A8DB6D7 /* WalkieTalkieButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98F9153B2BC2FC35733B3D6 /* WalkieTalkieButton.swift */; };
 		4560AFC130E2A5E1E2CA4F9F /* TrackProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33C3112283966EE1D927A76 /* TrackProgressBar.swift */; };
-		46DEE3BB2125BE46F96498A4 /* JoinSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2F8B2FD2A9DDC751223CA6 /* JoinSessionView.swift */; };
 		4798A78E07883E930AC99E82 /* NowPlayingBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1192C8ECB440A657DF09DA8D /* NowPlayingBridge.swift */; };
 		4F256D34C27378CB41526E2B /* MockClockProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46ED29ACB39D7297C647163D /* MockClockProvider.swift */; };
 		53A0279F375DDD8A93059362 /* MockSessionTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A827E3CA365E7EA1C6046F08 /* MockSessionTransport.swift */; };
@@ -65,7 +64,6 @@
 		D8D54BB2846DD4261FE6F924 /* MockTimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1406147C792A7CFC3A60768A /* MockTimerManager.swift */; };
 		D9A3C6C56ACDAFB1BAD995C5 /* ChairliftModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2584E7719F1217E8E2095659 /* ChairliftModeView.swift */; };
 		D9D3BEEFD1D1D6D0004CCFB1 /* HotSeatBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2198441C050E13DC4038C08 /* HotSeatBanner.swift */; };
-		DD43C9013B4D08E85474446D /* SessionLobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8CBC3E502740119B63125A /* SessionLobbyView.swift */; };
 		DFD8A3E9EE29DE39455C7F87 /* CRTStaticOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A82D8407B6C70640E10511 /* CRTStaticOverlay.swift */; };
 		E72BB7E77D74ED6E34344EFE /* BeatPulseBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3391FC863811594B8B3B3A /* BeatPulseBackground.swift */; };
 		EBDEB57FD74A698E940ECD1E /* PirateTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286E17C8D1EE92CA55C94361 /* PirateTheme.swift */; };
@@ -121,8 +119,6 @@
 		930F0CA3C4206C3B520DED51 /* SessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransport.swift; sourceTree = "<group>"; };
 		99BDD949DF4CA520A2BD819F /* CreateSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateSessionView.swift; sourceTree = "<group>"; };
 		9A84A72518AFAE7CD71F9A95 /* PirateRadioError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PirateRadioError.swift; sourceTree = "<group>"; };
-		9A8CBC3E502740119B63125A /* SessionLobbyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLobbyView.swift; sourceTree = "<group>"; };
-		9C2F8B2FD2A9DDC751223CA6 /* JoinSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoinSessionView.swift; sourceTree = "<group>"; };
 		A1720A39CC826635C5E5EC9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A827E3CA365E7EA1C6046F08 /* MockSessionTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSessionTransport.swift; sourceTree = "<group>"; };
 		A9E36B2DD0E2E2D8527ED28D /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
@@ -217,9 +213,7 @@
 				99BDD949DF4CA520A2BD819F /* CreateSessionView.swift */,
 				6F73EDEFF80F51A9FFEA6036 /* DiscoveryView.swift */,
 				5D6BA525897044C3AF5A8EB7 /* DJModePicker.swift */,
-				9C2F8B2FD2A9DDC751223CA6 /* JoinSessionView.swift */,
 				4FD24E4C942637EC14BE6E13 /* MemberProfileCard.swift */,
-				9A8CBC3E502740119B63125A /* SessionLobbyView.swift */,
 				1E74DECE41C50E3D1473600E /* SessionSettingsView.swift */,
 				25ED530F4F433D898F13CB2A /* TrackSearchView.swift */,
 			);
@@ -529,7 +523,6 @@
 				95E251D4BF3808924614D9D8 /* FrequencyDial.swift in Sources */,
 				A319CAEB80C6DAD005E19208 /* GloveButton.swift in Sources */,
 				D9D3BEEFD1D1D6D0004CCFB1 /* HotSeatBanner.swift in Sources */,
-				46DEE3BB2125BE46F96498A4 /* JoinSessionView.swift in Sources */,
 				B88273A111F419613BB75984 /* KronosClock.swift in Sources */,
 				C31E0020CA57B07870CD97F4 /* MemberProfileCard.swift in Sources */,
 				4F256D34C27378CB41526E2B /* MockClockProvider.swift in Sources */,
@@ -549,7 +542,6 @@
 
 				984FB2FAD9A80976D31A30F0 /* ServerMessage.swift in Sources */,
 				548613E89C576931E5791F2A /* Session.swift in Sources */,
-				DD43C9013B4D08E85474446D /* SessionLobbyView.swift in Sources */,
 				FB5940930C687FC0BDAC32C9 /* SessionRecapView.swift in Sources */,
 				FB2F94D4CA85F21F198002E1 /* SessionSettingsView.swift in Sources */,
 				54A178E82E792E3881E749BC /* SessionStore.swift in Sources */,
@@ -629,7 +621,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 15;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = A9738D53DZ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -649,7 +641,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.6;
+				MARKETING_VERSION = 0.2.4;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -714,7 +706,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 15;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = A9738D53DZ;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -728,7 +720,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.6;
+				MARKETING_VERSION = 0.2.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

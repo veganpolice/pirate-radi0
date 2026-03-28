@@ -1,6 +1,15 @@
 import Foundation
 import SwiftUI
 
+/// How the DJ role is managed in this session.
+enum DJMode: String, Codable, Sendable, CaseIterable, Identifiable {
+    case solo
+    case hotSeat
+    case freeForAll
+
+    var id: String { rawValue }
+}
+
 struct Session: Codable, Sendable, Identifiable, Equatable {
     let id: String              // Station ID (e.g. "station-88")
     var stationName: String     // e.g. "88.🏴‍☠️"
@@ -9,6 +18,10 @@ struct Session: Codable, Sendable, Identifiable, Equatable {
     var currentTrack: Track?
     var isPlaying: Bool
     var epoch: UInt64
+    var djUserID: UserID
+    var joinCode: String
+    var djMode: DJMode
+    var hotSeatSongsPerDJ: Int
 
     struct Member: Codable, Sendable, Identifiable, Equatable {
         let id: UserID
@@ -30,16 +43,21 @@ struct Session: Codable, Sendable, Identifiable, Equatable {
         }
     }
 
-    init(id: String, stationName: String = "",
+    init(id: String, stationName: String = "", joinCode: String = "",
+         creatorID: String? = nil, djUserID: UserID = "",
          members: [Member], queue: [Track], currentTrack: Track?, isPlaying: Bool,
-         epoch: UInt64) {
+         epoch: UInt64, djMode: DJMode = .solo, hotSeatSongsPerDJ: Int = 3) {
         self.id = id
         self.stationName = stationName
+        self.joinCode = joinCode
+        self.djUserID = djUserID
         self.members = members
         self.queue = queue
         self.currentTrack = currentTrack
         self.isPlaying = isPlaying
         self.epoch = epoch
+        self.djMode = djMode
+        self.hotSeatSongsPerDJ = hotSeatSongsPerDJ
     }
 }
 

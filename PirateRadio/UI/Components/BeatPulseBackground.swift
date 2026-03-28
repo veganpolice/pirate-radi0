@@ -6,6 +6,7 @@ import SwiftUI
 struct BeatPulseBackground: View {
     var isPlaying: Bool
     var members: [Session.Member] = []
+    var djUserID: UserID = ""
 
     @State private var bpm: Double = 128
     @State private var breathePhase: Bool = false

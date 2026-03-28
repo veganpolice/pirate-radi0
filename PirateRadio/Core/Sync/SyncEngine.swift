@@ -98,6 +98,36 @@ actor SyncEngine {
         }
     }
 
+    // MARK: - DJ Actions
+
+    func djPlay(track: Track) async throws {
+        try await musicSource.play(trackID: track.id, at: .zero)
+        let msg = SyncMessage(
+            id: UUID(),
+            type: .addToQueue(track: track, nonce: UUID().uuidString),
+            sequenceNumber: 0,
+            epoch: currentEpoch,
+            timestamp: clock.now()
+        )
+        try await transport.send(msg)
+    }
+
+    func djPause() async throws {
+        try await musicSource.pause()
+    }
+
+    func djResume() async throws {
+        if let anchor = currentAnchor {
+            let now = clock.now()
+            let pos = anchor.positionAt(ntpTime: now)
+            try await musicSource.play(trackID: anchor.trackID, at: .seconds(pos))
+        }
+    }
+
+    func djSeek(to positionMs: Int) async throws {
+        try await musicSource.seek(to: .milliseconds(positionMs))
+    }
+
     // MARK: - Actions (available to all users)
 
     func sendAddToQueue(track: Track) async {
