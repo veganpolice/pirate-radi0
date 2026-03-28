@@ -52,7 +52,6 @@ struct SessionStoreTests {
             ntpAnchor: 0,
             playbackRate: 0,
             queue: [],
-            djUserID: "new-dj",
             epoch: 1,
             sequenceNumber: 0,
             members: [
@@ -84,7 +83,6 @@ struct SessionStoreTests {
             ntpAnchor: 1_000_000,
             playbackRate: 1.0,
             queue: [],
-            djUserID: "dj-1",
             epoch: 1,
             sequenceNumber: 0,
             members: [
@@ -110,7 +108,6 @@ struct SessionStoreTests {
             ntpAnchor: 0,
             playbackRate: 0,
             queue: [],
-            djUserID: "dj-1",
             epoch: 1,
             sequenceNumber: 0,
             members: [
@@ -122,31 +119,4 @@ struct SessionStoreTests {
         #expect(store.playbackAnchor == nil)
     }
 
-    // MARK: - DJ Promotion
-
-    @Test("handleUpdate with stateSync promotes new DJ")
-    func stateSyncPromotesNewDJ() {
-        let store = makeStore()
-        let originalDJ = store.session?.djUserID
-
-        // stateSync with a different DJ
-        let snapshot = SessionSnapshot(
-            trackID: nil,
-            positionAtAnchor: 0,
-            ntpAnchor: 0,
-            playbackRate: 0,
-            queue: [],
-            djUserID: "promoted-user",
-            epoch: 2,
-            sequenceNumber: 0,
-            members: [
-                SessionSnapshot.SnapshotMember(userId: "promoted-user", displayName: "Promoted"),
-            ]
-        )
-        store.handleUpdate(.stateSynced(snapshot))
-
-        #expect(store.session?.djUserID == "promoted-user")
-        #expect(store.session?.djUserID != originalDJ)
-        #expect(store.session?.epoch == 2)
-    }
 }

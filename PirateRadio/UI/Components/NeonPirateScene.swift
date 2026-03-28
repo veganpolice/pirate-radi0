@@ -2,11 +2,9 @@ import SwiftUI
 
 /// A tiny neon-outlined pirate fleet sailing between mountains.
 /// One ship per crew member, each with a random time offset and slightly different speed.
-/// The DJ's ship is larger — it's the flagship.
 struct NeonPirateScene: View {
     var color: Color = PirateTheme.signal
     var members: [Session.Member] = []
-    var djUserID: UserID = ""
 
     @State private var bobPhase: Bool = false
     @State private var sailPulse: Bool = false
@@ -21,20 +19,16 @@ struct NeonPirateScene: View {
                 waterLine(w: w, h: h)
 
                 ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-                    let isDJ = member.id == djUserID
-                    let nonDJIndex = members.filter { $0.id != djUserID }.firstIndex(where: { $0.id == member.id })
-                    let nonDJCount = max(members.filter { $0.id != djUserID }.count, 1)
                     SailingShip(
                         color: member.avatarColor.color,
-                        cycleOffset: isDJ ? 0 : spacedOffset(index: nonDJIndex ?? 0, total: nonDJCount, id: member.id),
+                        cycleOffset: spacedOffset(index: index, total: members.count, id: member.id),
                         cycleDuration: stableSpeed(for: member.id),
                         sceneWidth: w,
                         bobPhase: bobPhase,
-                        sailPulse: sailPulse,
-                        immediate: isDJ
+                        sailPulse: sailPulse
                     )
-                    .frame(width: isDJ ? 52 : 38, height: isDJ ? 44 : 32)
-                    .position(x: w * 0.5, y: h * (isDJ ? 0.64 : 0.68))
+                    .frame(width: 38, height: 32)
+                    .position(x: w * 0.5, y: h * 0.68)
                 }
             }
         }
