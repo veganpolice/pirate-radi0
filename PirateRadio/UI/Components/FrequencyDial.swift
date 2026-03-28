@@ -18,8 +18,8 @@ struct FrequencyDial: View {
     private let tickCount = 20
 
     // FM band range for frequency-to-dial mapping
-    private let fmMin: Double = 88.0
-    private let fmMax: Double = 108.0
+    static let fmMin: Double = 88.0
+    static let fmMax: Double = 108.0
 
     /// The dial value (0–1) for the currently selected station.
     private var dialValue: Double {
@@ -206,6 +206,6 @@ struct FrequencyDial: View {
     }
 
     private func frequencyToDialValue(_ frequency: Double) -> Double {
-        (frequency - fmMin) / (fmMax - fmMin)
+        (frequency - Self.fmMin) / (Self.fmMax - Self.fmMin)
     }
 }

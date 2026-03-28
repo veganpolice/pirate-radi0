@@ -31,7 +31,10 @@ final class SessionStore {
 
     private(set) var stations: [Station] = []
     private(set) var isAutoTuning = false
+    /// The station currently being previewed on the dial (audio playing, not yet joined).
+    private(set) var previewingStation: Station?
     private var tuneTask: Task<Void, Never>?
+    private var previewDebounceTask: Task<Void, Never>?
     private var spotifyWakeTask: Task<Void, Never>?
     private var tuneGeneration: UUID = UUID()
 
@@ -87,6 +90,7 @@ final class SessionStore {
     }
 
     /// Auto-tune to the last-listened station (or first station) on app launch.
+    /// Previews audio without joining — the user can scrub the dial and tap Join.
     func autoTune() async {
         guard !isAutoTuning, session == nil else { return }
         isAutoTuning = true
@@ -98,18 +102,45 @@ final class SessionStore {
         let lastStationId = UserDefaults.standard.string(forKey: "lastTunedStationId")
         guard let target = stations.first(where: { $0.id == lastStationId }) ?? stations.first else { return }
 
-        await tuneToStationById(target.id)
-        if error == nil {
-            UserDefaults.standard.set(target.id, forKey: "lastTunedStationId")
+        previewStation(target)
+    }
+
+    /// Preview a station's audio on the dial without joining.
+    /// Plays the station's current track directly via Spotify (no SyncEngine).
+    /// Pauses immediately when moving away; debounces play() to avoid rapid-fire IPC during scrubbing.
+    func previewStation(_ station: Station?) {
+        guard station?.id != previewingStation?.id else { return }
+        previewingStation = station
+        previewDebounceTask?.cancel()
+
+        guard let station, let track = station.currentTrack else {
+            // No station or station has no track — pause immediately
+            if authManager.isConnectedToSpotifyApp {
+                authManager.appRemote.playerAPI?.pause(nil)
+            }
+            return
+        }
+
+        // Debounce play() so rapid scrubbing doesn't fire a burst of Spotify IPC calls
+        let uri = "spotify:track:\(track.id)"
+        previewDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            if authManager.isConnectedToSpotifyApp {
+                authManager.appRemote.playerAPI?.play(uri, callback: nil)
+            } else {
+                authManager.wakeSpotifyAndConnect(playURI: uri)
+            }
         }
     }
 
-    /// Tune to a specific station from the dial. Cancel-and-replace for rapid switching.
+    /// Join a station from the dial. Cancel-and-replace for rapid switching.
     func tuneToStation(_ station: Station) {
         guard session?.id != station.id else { return }
         tuneTask?.cancel()
         let generation = UUID()
         tuneGeneration = generation
+        previewingStation = nil
         tuneTask = Task {
             if session != nil {
                 await leaveSession()

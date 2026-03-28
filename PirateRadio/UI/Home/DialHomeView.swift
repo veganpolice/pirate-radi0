@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The radio dial home screen. Snap between 5 fixed stations,
+/// The radio dial home screen. Previews station audio as you scrub the dial,
 /// then tap "Tune In" to join.
 struct DialHomeView: View {
     @Environment(SessionStore.self) private var sessionStore
@@ -50,17 +50,29 @@ struct DialHomeView: View {
             }
         }
         .task {
-            await sessionStore.fetchStations()
-            // Restore last-tuned station index
-            if let lastId = UserDefaults.standard.string(forKey: "lastTunedStationId"),
-               let idx = sessionStore.stations.firstIndex(where: { $0.id == lastId }) {
+            await sessionStore.autoTune()
+            // Position dial at the auto-tuned station
+            if let station = sessionStore.previewingStation,
+               let idx = sessionStore.stations.firstIndex(where: { $0.id == station.id }) {
                 selectedStationIndex = idx
             }
         }
+        .onChange(of: selectedStationIndex) { _, _ in
+            // Preview audio when the dial snaps to a different station
+            sessionStore.previewStation(selectedStation)
+        }
         .onChange(of: sessionStore.session) { oldValue, newValue in
-            // Re-fetch stations when returning from a session
+            // Re-fetch stations and resume preview when returning from a session
             if oldValue != nil && newValue == nil {
-                Task { await sessionStore.fetchStations() }
+                Task {
+                    await sessionStore.fetchStations()
+                    // Restore last-tuned station index and preview
+                    if let lastId = UserDefaults.standard.string(forKey: "lastTunedStationId"),
+                       let idx = sessionStore.stations.firstIndex(where: { $0.id == lastId }) {
+                        selectedStationIndex = idx
+                    }
+                    sessionStore.previewStation(selectedStation)
+                }
             }
         }
     }
