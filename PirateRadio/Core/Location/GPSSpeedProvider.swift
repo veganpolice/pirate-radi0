@@ -49,6 +49,21 @@ final class GPSSpeedProvider: NSObject, SpeedProvider, CLLocationManagerDelegate
         #endif
     }
 
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        switch manager.authorizationStatus {
+        case .denied, .restricted:
+            #if DEBUG
+            print("[GPSSpeed] Location access denied — yielding 0 speed")
+            #endif
+            // Yield 0 so the manager drops to stopped zone instead of hanging
+            continuation.yield(0)
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.startUpdatingLocation()
+        default:
+            break
+        }
+    }
+
     deinit {
         continuation.finish()
     }

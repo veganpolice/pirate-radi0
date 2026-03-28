@@ -24,7 +24,6 @@ final class SpeedVolumeSettings {
 
     let stoppedThreshold: Double = 2.0       // mph
     let chairliftLow: Double = 4.0           // mph
-    let chairliftHigh: Double = 10.0         // mph
     let ridingThreshold: Double = 10.0       // mph
     let hysteresisMargin: Double = 1.5       // mph
     let fadeDuration: Double = 2.0           // seconds

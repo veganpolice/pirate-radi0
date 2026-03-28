@@ -85,6 +85,18 @@ struct PirateRadioApp: App {
                         speedVolumeManager?.stop()
                     }
                 }
+                .onChange(of: speedVolumeSettings.stoppedVolumePercent) { _, _ in
+                    speedVolumeManager?.reapplyCurrentZone()
+                }
+                .onChange(of: speedVolumeSettings.chairliftBehavior) { _, _ in
+                    speedVolumeManager?.reapplyCurrentZone()
+                }
+                .onAppear {
+                    // Auto-start if enabled from a previous session
+                    if speedVolumeSettings.isEnabled, sessionStore?.session != nil {
+                        startSpeedVolume()
+                    }
+                }
         }
     }
 

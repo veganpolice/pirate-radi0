@@ -33,5 +33,11 @@ final class SystemVolumeController: VolumeController {
             }
         }
         self.volumeView = view
+
+        #if DEBUG
+        if volumeSlider == nil {
+            print("[SystemVolume] Warning: UISlider not found in MPVolumeView — volume control will be inoperable")
+        }
+        #endif
     }
 }

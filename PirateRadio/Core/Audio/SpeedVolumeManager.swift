@@ -33,6 +33,7 @@ final class SpeedVolumeManager {
     private var speedTask: Task<Void, Never>?
     private var fadeTask: Task<Void, Never>?
     private var volumeObservation: NSKeyValueObservation?
+    private var isSettingVolume = false
 
     // EMA smoothing
     private let emaAlpha: Double = 0.3
@@ -90,6 +91,20 @@ final class SpeedVolumeManager {
         currentZone = .stopped
     }
 
+    /// Re-applies volume for the current zone. Call when settings change mid-session.
+    func reapplyCurrentZone() {
+        guard isRunning else { return }
+        let multiplier = zoneMultiplier(for: currentZone)
+        if multiplier != currentTargetMultiplier {
+            fadeToMultiplier(multiplier)
+        } else {
+            // Same target but settings value may have changed (e.g. slider moved)
+            let volume = Float(multiplier) * userVolumeCeiling
+            applyVolume(min(volume, userVolumeCeiling))
+            currentAppliedMultiplier = multiplier
+        }
+    }
+
     // MARK: - Speed Processing
 
     private func handleSpeedUpdate(_ rawSpeed: Double) {
@@ -111,11 +126,11 @@ final class SpeedVolumeManager {
 
         switch currentZone {
         case .stopped:
-            if speed > settings.chairliftLow + margin {
-                return .chairlift
-            }
             if speed > settings.ridingThreshold + margin {
                 return .riding
+            }
+            if speed > settings.chairliftLow + margin {
+                return .chairlift
             }
             return .stopped
 
@@ -180,8 +195,19 @@ final class SpeedVolumeManager {
                 self.currentAppliedMultiplier = multiplier
 
                 let volume = Float(multiplier) * self.userVolumeCeiling
-                self.volumeController.setVolume(min(volume, self.userVolumeCeiling))
+                self.applyVolume(min(volume, self.userVolumeCeiling))
             }
+        }
+    }
+
+    /// Sets volume while suppressing KVO feedback to prevent ceiling ratcheting.
+    private func applyVolume(_ volume: Float) {
+        isSettingVolume = true
+        volumeController.setVolume(volume)
+        // Delay reset to allow KVO notification to fire and be ignored
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            self?.isSettingVolume = false
         }
     }
 
@@ -194,11 +220,11 @@ final class SpeedVolumeManager {
         volumeObservation = session.observe(\.outputVolume, options: [.new]) { [weak self] _, change in
             guard let newVolume = change.newValue else { return }
             Task { @MainActor [weak self] in
-                guard let self, self.isRunning else { return }
+                guard let self, self.isRunning, !self.isSettingVolume else { return }
                 self.userVolumeCeiling = newVolume
                 // Re-apply current multiplier with new ceiling
                 let volume = Float(self.currentAppliedMultiplier) * newVolume
-                self.volumeController.setVolume(min(volume, newVolume))
+                self.applyVolume(min(volume, newVolume))
             }
         }
     }
