@@ -160,6 +160,7 @@ struct NowPlayingView: View {
                 .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
 
+
             // Bottom menu bar
             bottomBar
         }
@@ -362,19 +363,34 @@ struct NowPlayingView: View {
     // MARK: - Listener Controls
 
     private var listenerControls: some View {
-        HStack(spacing: 16) {
-            ConnectionStatusBadge(state: sessionStore.connectionState)
-
-            Spacer()
-
-            Button { showQueue = true } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus")
-                    Text("Request Song")
-                }
+        HStack(spacing: 20) {
+            // Mute / Unmute
+            Button {
+                withAnimation(.spring(duration: 0.2)) { isMuted.toggle() }
+            } label: {
+                Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.largeTitle)
             }
-            .buttonStyle(GloveButtonStyle(color: PirateTheme.signal))
+            .buttonStyle(GloveButtonStyle(color: isMuted ? PirateTheme.flare : PirateTheme.signal))
+            .sensoryFeedback(.impact(weight: .medium), trigger: isMuted)
+
+            // Skip
+            Button {
+                skipTrigger.toggle()
+                if PirateRadioApp.demoMode {
+                    sessionStore.demoSkipToNext()
+                } else {
+                    Task { await sessionStore.skipToNext() }
+                }
+            } label: {
+                Image(systemName: "forward.fill")
+                    .font(.title2)
+            }
+            .disabled(sessionStore.session?.queue.isEmpty != false)
+            .frame(minWidth: 52, minHeight: 52)
+            .sensoryFeedback(.impact(weight: .light), trigger: skipTrigger)
         }
+        .foregroundStyle(PirateTheme.signal)
         .padding(.vertical, 8)
     }
 
