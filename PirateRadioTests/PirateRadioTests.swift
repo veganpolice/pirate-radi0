@@ -31,20 +31,18 @@ struct PirateRadioTests {
         #expect(track.durationFormatted == "1:01")
     }
 
-    @Test("Session join code is 4 characters")
-    func sessionJoinCodeLength() {
+    @Test("Session stationName is preserved")
+    func sessionStationName() {
         let session = Session(
             id: "session-1",
-            joinCode: "ABCD",
-            creatorID: "user-1",
-            djUserID: "user-1",
+            stationName: "88.🏴‍☠️",
             members: [],
             queue: [],
             currentTrack: nil,
             isPlaying: false,
             epoch: 0
         )
-        #expect(session.joinCode.count == 4)
+        #expect(session.stationName == "88.🏴‍☠️")
     }
 
     @Test("NTPAnchoredPosition computes offset correctly")
@@ -359,68 +357,6 @@ struct SyncMessageCodableTests {
         return try decoder.decode(SyncMessage.self, from: data)
     }
 
-    @Test("playPrepare round-trips through JSON")
-    func playPrepareRoundTrip() throws {
-        let original = makeMessage(type: .playPrepare(trackID: "track-1", prepareDeadline: 5_000))
-        let decoded = try roundTrip(original)
-        #expect(decoded.id == original.id)
-        #expect(decoded.sequenceNumber == original.sequenceNumber)
-        #expect(decoded.epoch == original.epoch)
-        if case .playPrepare(let trackID, let deadline) = decoded.type {
-            #expect(trackID == "track-1")
-            #expect(deadline == 5_000)
-        } else {
-            Issue.record("Expected .playPrepare, got \(decoded.type)")
-        }
-    }
-
-    @Test("playCommit round-trips through JSON")
-    func playCommitRoundTrip() throws {
-        let original = makeMessage(type: .playCommit(trackID: "track-2", startAtNtp: 1_700_000_001_000, refSeq: 6))
-        let decoded = try roundTrip(original)
-        if case .playCommit(let trackID, let startAt, let refSeq) = decoded.type {
-            #expect(trackID == "track-2")
-            #expect(startAt == 1_700_000_001_000)
-            #expect(refSeq == 6)
-        } else {
-            Issue.record("Expected .playCommit, got \(decoded.type)")
-        }
-    }
-
-    @Test("pause round-trips through JSON")
-    func pauseRoundTrip() throws {
-        let original = makeMessage(type: .pause(atNtp: 9_999))
-        let decoded = try roundTrip(original)
-        if case .pause(let atNtp) = decoded.type {
-            #expect(atNtp == 9_999)
-        } else {
-            Issue.record("Expected .pause, got \(decoded.type)")
-        }
-    }
-
-    @Test("resume round-trips through JSON")
-    func resumeRoundTrip() throws {
-        let original = makeMessage(type: .resume(atNtp: 10_001))
-        let decoded = try roundTrip(original)
-        if case .resume(let atNtp) = decoded.type {
-            #expect(atNtp == 10_001)
-        } else {
-            Issue.record("Expected .resume, got \(decoded.type)")
-        }
-    }
-
-    @Test("seek round-trips through JSON")
-    func seekRoundTrip() throws {
-        let original = makeMessage(type: .seek(positionMs: 45_000, atNtp: 2_000_000))
-        let decoded = try roundTrip(original)
-        if case .seek(let positionMs, let atNtp) = decoded.type {
-            #expect(positionMs == 45_000)
-            #expect(atNtp == 2_000_000)
-        } else {
-            Issue.record("Expected .seek, got \(decoded.type)")
-        }
-    }
-
     @Test("skip round-trips through JSON")
     func skipRoundTrip() throws {
         let original = makeMessage(type: .skip)
@@ -432,16 +368,16 @@ struct SyncMessageCodableTests {
         }
     }
 
-    @Test("driftReport round-trips through JSON")
-    func driftReportRoundTrip() throws {
-        let original = makeMessage(type: .driftReport(trackID: "t-1", positionMs: 12_345, ntpTimestamp: 3_000_000))
+    @Test("addToQueue round-trips through JSON")
+    func addToQueueRoundTrip() throws {
+        let track = Track(id: "track-xyz", name: "Test", artist: "Artist", albumName: "Album", albumArtURL: nil, durationMs: 180000)
+        let original = makeMessage(type: .addToQueue(track: track, nonce: "nonce-1"))
         let decoded = try roundTrip(original)
-        if case .driftReport(let trackID, let posMs, let ntp) = decoded.type {
-            #expect(trackID == "t-1")
-            #expect(posMs == 12_345)
-            #expect(ntp == 3_000_000)
+        if case .addToQueue(let decodedTrack, let nonce) = decoded.type {
+            #expect(decodedTrack.id == "track-xyz")
+            #expect(nonce == "nonce-1")
         } else {
-            Issue.record("Expected .driftReport, got \(decoded.type)")
+            Issue.record("Expected .addToQueue, got \(decoded.type)")
         }
     }
 
@@ -457,7 +393,7 @@ struct SyncMessageCodableTests {
             ntpAnchor: 4_000_000,
             playbackRate: 1.0,
             queue: queueTracks,
-            djUserID: "dj-user",
+            stationName: "88.🏴‍☠️",
             epoch: 5,
             sequenceNumber: 100
         )
@@ -471,7 +407,7 @@ struct SyncMessageCodableTests {
             #expect(decodedSnapshot.queue.count == 2)
             #expect(decodedSnapshot.queue[0].id == "q1")
             #expect(decodedSnapshot.queue[1].id == "q2")
-            #expect(decodedSnapshot.djUserID == "dj-user")
+            #expect(decodedSnapshot.stationName == "88.🏴‍☠️")
             #expect(decodedSnapshot.epoch == 5)
             #expect(decodedSnapshot.sequenceNumber == 100)
         } else {
@@ -628,9 +564,7 @@ struct SessionMemberTests {
     private func makeSession(members: [Session.Member] = []) -> Session {
         Session(
             id: "session-1",
-            joinCode: "1234",
-            creatorID: "creator",
-            djUserID: "creator",
+            stationName: "88.🏴‍☠️",
             members: members,
             queue: [],
             currentTrack: nil,
@@ -713,9 +647,7 @@ struct SessionMemberTests {
         let track = Track(id: "t1", name: "Song", artist: "A", albumName: "Al", albumArtURL: nil, durationMs: 200_000)
         let original = Session(
             id: "session-99",
-            joinCode: "9876",
-            creatorID: "creator-1",
-            djUserID: "dj-1",
+            stationName: "99.🏴‍☠️",
             members: [
                 makeMember(id: "m1", name: "Member 1"),
                 makeMember(id: "m2", name: "Member 2", connected: false),
