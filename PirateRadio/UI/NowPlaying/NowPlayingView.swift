@@ -129,6 +129,12 @@ struct NowPlayingView: View {
                 .transition(.opacity)
             }
 
+            // Upcoming tracks
+            if let queue = sessionStore.session?.queue, !queue.isEmpty {
+                upNextSection(queue: queue)
+                    .padding(.top, 16)
+            }
+
             Spacer()
 
             // Neon pirate fleet sailing between mountains
@@ -242,6 +248,26 @@ struct NowPlayingView: View {
             }
         }
         .padding(.top, 8)
+    }
+
+    // MARK: - Up Next
+
+    private func upNextSection(queue: [Track]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("UP NEXT")
+                .font(PirateTheme.body(11))
+                .foregroundStyle(PirateTheme.signal.opacity(0.5))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(queue.prefix(5)) { track in
+                        TrackTileView(track: track, style: .upcoming)
+                            .frame(width: 220)
+                    }
+                }
+            }
+            .scrollClipDisabled()
+        }
     }
 
     // MARK: - Crew Strip
