@@ -69,6 +69,59 @@ struct SessionStoreTests {
         #expect(store.session?.members.contains { $0.id == "extra-1" } == false)
     }
 
+    // MARK: - Playback Anchor
+
+    @Test("stateSync with active track stores playback anchor")
+    func stateSyncStoresPlaybackAnchor() {
+        let store = makeStore()
+
+        // Before any stateSync, anchor should be nil
+        #expect(store.playbackAnchor == nil)
+
+        let snapshot = SessionSnapshot(
+            trackID: "track-123",
+            positionAtAnchor: 30.0,
+            ntpAnchor: 1_000_000,
+            playbackRate: 1.0,
+            queue: [],
+            djUserID: "dj-1",
+            epoch: 1,
+            sequenceNumber: 0,
+            members: [
+                SessionSnapshot.SnapshotMember(userId: "dj-1", displayName: "DJ"),
+            ]
+        )
+        store.handleUpdate(.stateSynced(snapshot))
+
+        #expect(store.playbackAnchor != nil)
+        #expect(store.playbackAnchor?.trackID == "track-123")
+        #expect(store.playbackAnchor?.positionAtAnchor == 30.0)
+        #expect(store.playbackAnchor?.ntpAnchor == 1_000_000)
+        #expect(store.playbackAnchor?.playbackRate == 1.0)
+    }
+
+    @Test("stateSync without track does not set anchor")
+    func stateSyncNoTrackNoAnchor() {
+        let store = makeStore()
+
+        let snapshot = SessionSnapshot(
+            trackID: nil,
+            positionAtAnchor: 0,
+            ntpAnchor: 0,
+            playbackRate: 0,
+            queue: [],
+            djUserID: "dj-1",
+            epoch: 1,
+            sequenceNumber: 0,
+            members: [
+                SessionSnapshot.SnapshotMember(userId: "dj-1", displayName: "DJ"),
+            ]
+        )
+        store.handleUpdate(.stateSynced(snapshot))
+
+        #expect(store.playbackAnchor == nil)
+    }
+
     // MARK: - DJ Promotion
 
     @Test("handleUpdate with stateSync promotes new DJ")
